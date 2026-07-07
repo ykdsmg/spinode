@@ -6,7 +6,6 @@
 import json
 
 from fastapi import APIRouter, HTTPException, Query, Path, Request, Depends
-from app.http.client import HttpClient
 from app.api.schemas import ApiResponse, PROrderSearch
 from app.resources.paris.order import Order
 from app.platform.ParisShop import ParisShop as Shop
@@ -25,16 +24,17 @@ def get_paris_shops(request: Request):
 
 @router.get("/paris/shop/order/sync", response_model=ApiResponse)
 async def order_sync(
+    request: Request,
     shops=Depends(get_paris_shops),
     searchmodel: PROrderSearch = Query({}, description="商品搜索参数"),
 ):
     """同步订单"""
+    session = request.app.state.http_session
     search = searchmodel.model_dump(exclude_none=True)
 
     for shop in shops.values():
             try:
-                async with HttpClient() as client:
-                    await Order(shop, client).sync(search)
+                await Order(shop).sync(session, search)
             except HTTPException:
                 raise
             except Exception as e:
@@ -49,6 +49,7 @@ async def order_sync(
 
 @router.get("/paris/shop/{seller_id}/order/search",response_model=ApiResponse)
 async def order_search(
+    request: Request,
     seller_id: str = Path(description="SELLER ID 必填"),
     shops: dict[str, Shop] = Depends(get_paris_shops),
     searchmodel: PROrderSearch = Query({}, description="订单搜索参数"),
@@ -59,12 +60,12 @@ async def order_search(
     if seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
 
+    session = request.app.state.http_session
     shop = shops[seller_id]
     search = searchmodel.model_dump(exclude_none=True)
 
     try:
-        async with HttpClient() as client:
-            resp = await Order(shop, client).searchorder(search)
+        resp = await Order(shop).searchorder(session, search)
     except HTTPException:
         raise
     except Exception as e:

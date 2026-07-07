@@ -1,199 +1,199 @@
 """Paris 订单资源: Orders 请求 / 解析 / 存储 / 同步"""
 
+import aiohttp
 from datetime import datetime, timedelta
-
 from app.db.manager import DBManager
-from app.http.client import HttpClient
 from app.platform.ParisShop import ParisShop
+
+from app.core.converters import _trim
 
 
 class Order:
-    """商品资源。"""
+    """订单资源（无 QPM 需求，直接使用共享 session）。"""
 
-    def __init__(self, shop: ParisShop, client: HttpClient) -> None:
+    def __init__(self, shop: ParisShop) -> None:
         self.shop = shop
-        self.client = client
 
-    def parse(self, origin: dict):
+    # ── 解析 ──────────────────────────────────────
+
+    def parse(self, origin: dict) -> dict:
+        """解析订单 API 响应 → order / sub_order / item 三表数据。"""
         listado = origin.get("data") or []
         if isinstance(listado, dict):
             listado = [listado]
 
-        order_data = []
-        sub_order_data = []
-        items_data = []
+        order_rows: list[dict] = []
+        sub_order_rows: list[dict] = []
+        item_rows: list[dict] = []
+
         for order in listado:
-            # data 字段
-            originOrderDate = order.get("originOrderDate")
-            createdAt = order.get("createdAt")
-            # dict 字段
+            # ── 展平一级字段 ──
             customer = order.get("customer") or {}
-            billingAddress = order.get("billingAddress") or {}
-            # list 字段
+            billing = order.get("billingAddress") or {}
             subOrders = order.get("subOrders") or []
 
-            order_info = {
-                "id": order.get("id"),
-                "origin": order.get("origin"),
-                "originOrderNumber": order.get("originOrderNumber"),
-                "subOrderNumber": order.get("subOrderNumber"),
-                "originInvoiceType": order.get("originInvoiceType"),
-                "originOrderDate": originOrderDate[:19] if originOrderDate else None,
-                "createdAt": createdAt[:19] if createdAt else None,
-                "customerId": customer.get("id"),
-                "customerName": customer.get("name"),
-                "customerEmail": customer.get("email"),
-                "customerDocumentType": customer.get("documentType"),
-                "customerDocumentNumber": customer.get("documentNumber"),
-                "businessInvoice": order.get("businessInvoice"),
-                "billingAddressId": billingAddress.get("id"),
-                "firstName": billingAddress.get("firstName"),
-                "lastName": billingAddress.get("lastName"),
-                "address1": billingAddress.get("address1"),
-                "address2": billingAddress.get("address2"),
-                "address3": billingAddress.get("address3"),
-                "city": billingAddress.get("city"),
-                "stateCode": billingAddress.get("stateCode"),
-                "countryCode": billingAddress.get("countryCode"),
-                "phone": billingAddress.get("phone"),
-                "communaCode": billingAddress.get("communaCode"),
-                "additionalInfo": billingAddress.get("additionalInfo"),
-                "pickUpStoreId": billingAddress.get("pickUpStoreId")
-            }
-            order_data.append(order_info)
+            order_rows.append({
+                "order_id":           order.get("id"),
+                "origin":             order.get("origin"),
+                "origin_order_number":order.get("originOrderNumber"),
+                "sub_order_number":   order.get("subOrderNumber"),
+                "origin_invoice_type":order.get("originInvoiceType"),
+                "origin_order_date":  _trim(order.get("originOrderDate")),
+                "created_at":         _trim(order.get("createdAt")),
+                "customer_id":        customer.get("id"),
+                "customer_name":      customer.get("name"),
+                "customer_email":     customer.get("email"),
+                "customer_doc_type":  customer.get("documentType"),
+                "customer_doc_number":customer.get("documentNumber"),
+                "business_invoice":   order.get("businessInvoice"),
+                "billing_address_id": billing.get("id"),
+                "first_name":         billing.get("firstName"),
+                "last_name":          billing.get("lastName"),
+                "address1":           billing.get("address1"),
+                "address2":           billing.get("address2"),
+                "address3":           billing.get("address3"),
+                "city":               billing.get("city"),
+                "state_code":         billing.get("stateCode"),
+                "country_code":       billing.get("countryCode"),
+                "phone":              billing.get("phone"),
+                "communa_code":       billing.get("communaCode"),
+                "additional_info":    billing.get("additionalInfo"),
+                "pick_up_store_id":   billing.get("pickUpStoreId"),
+            })
 
-            for suborder in subOrders:
-                deliveryOption = suborder.get("deliveryOption") or {}
-                status = suborder.get("status") or {}
-                items = suborder.get("items") or []
-                # date
-                dispatchDate = suborder.get("dispatchDate") or None
-                arrivalDate = suborder.get("arrivalDate") or None
-                arrivalDateEnd = suborder.get("arrivalDateEnd") or None
-                effectiveArrivalDate = suborder.get("effectiveArrivalDate") or None
-                effectiveDispatchDate = suborder.get("effectiveDispatchDate") or None
-                effectiveManifestDate = suborder.get("effectiveManifestDate") or None
-                updatedAt = suborder.get("updatedAt") or None
-                originOrderDate = suborder.get("originOrderDate") or None
-                suborder_info = {
-                    "id": suborder.get("id"),
-                    "subOrderNumber": suborder.get("subOrderNumber"),
-                    "statusId": suborder.get("statusId"),
-                    "carrier": suborder.get("carrier"),
-                    "trackingNumber": suborder.get("trackingNumber"),
-                    "labelId": suborder.get("labelId"),
-                    "deliveryExternalId": suborder.get("deliveryExternalId"),
-                    "dispatchDate": dispatchDate[:19] if dispatchDate else None,
-                    "arrivalDate": arrivalDate[:19] if arrivalDate else None,
-                    "arrivalDateEnd": arrivalDateEnd[:19] if arrivalDateEnd else None,
-                    "effectiveArrivalDate": effectiveArrivalDate[:19] if effectiveArrivalDate else None,
-                    "effectiveDispatchDate": effectiveDispatchDate[:19] if effectiveDispatchDate else None,
-                    "effectiveManifestDate": effectiveManifestDate[:19] if effectiveManifestDate else None,
-                    "lastNotificationId": suborder.get("lastNotificationId"),
-                    "fulfillment": suborder.get("fulfillment"),
-                    "cost": suborder.get("cost"),
-                    "updatedAt": updatedAt[:19] if updatedAt else None,
-                    "summaryId": suborder.get("summaryId"),
-                    "facilityConfigId": suborder.get("facilityConfigId"),
-                    "bocbolOrderId": suborder.get("bocbolOrderId"),
-                    "isSplitted": suborder.get("isSplitted"),
-                    "originOrderNumber": suborder.get("originOrderNumber"),
-                    "originInvoiceType": suborder.get("originInvoiceType"),
-                    "originOrderDate": originOrderDate[:19] if originOrderDate else None,
-                    "origin": suborder.get("origin"),
-                    "deliveryOptionId": deliveryOption.get("id"),
-                    "deliveryOptionName": deliveryOption.get("name"),
-                    "deliveryOptionDescription": deliveryOption.get("description"),
-                    "deliveryOptionTranslate": deliveryOption.get("translate"),
-                    "statusName": status.get("name"),
-                    "statusDescription": status.get("description"),
-                    "statusTranslate": status.get("translate"),
-                    "statusCancelable": status.get("cancelable"),
-                    "orderTypeId": suborder.get("id"),
-                }
-                sub_order_data.append(suborder_info)
+            # ── 子订单 ──
+            for sub in subOrders:
+                delivery = sub.get("deliveryOption") or {}
+                status   = sub.get("status") or {}
 
-                for item in items:
-                    status = item.get("status") or {}
-                    categoryObj = item.get("categoryObj") or {}
-                    item_info = {
-                        "id": item.get("id"),
-                        "sku": item.get("sku"),
-                        "name": item.get("name"),
-                        "sellerId": item.get("sellerId"),
-                        "jdaSku": item.get("jdaSku"),
-                        "basePrice": item.get("basePrice"),
-                        "grossPrice": item.get("grossPrice"),
-                        "priceAfterDiscounts": item.get("priceAfterDiscounts"),
-                        "taxRate": item.get("taxRate"),
-                        "size": item.get("size"),
-                        "sellerSku": item.get("sellerSku"),
-                        "tax": item.get("tax"),
-                        "position": item.get("position"),
-                        "taxBasis": item.get("taxBasis"),
-                        "commission": item.get("commission"),
-                        "subOrderNumber": item.get("subOrderNumber"),
-                        "reconditioned": item.get("reconditioned"),
-                        "cancellationReasonId": item.get("cancellationReasonId"),
-                        "statusId": item.get("statusId"),
-                        "imagePath": item.get("imagePath"),
-                        "itemSize": item.get("itemSize"),
-                        "returnId": item.get("returnId"),
-                        "userId": item.get("userId"),
-                        "shippingCost": item.get("shippingCost"),
-                        "externalCategoryId": item.get("externalCategoryId"),
-                        "statusName": status.get("name"),
-                        "statusDescription": status.get("description"),
-                        "statusTranslate": status.get("translate"),
-                        "statusCancelable": status.get("cancelable"),
-                        "cancellationReason": item.get("cancellationReason"),
-                        "return": item.get("return"),
-                        "categoryObjId": categoryObj.get("id"),
-                        "categoryObjName": categoryObj.get("name"),
-                        "categoryObjCode": categoryObj.get("code"),
-                        "categoryObjWeight": categoryObj.get("weight"),
-                        "categoryObjExternalCategoryId": categoryObj.get("externalCategoryId"),
-                        "orderId": item.get("orderId"),
-                    }
-                    items_data.append(item_info)
+                sub_order_rows.append({
+                    "sub_order_id":           sub.get("id"),
+                    "sub_order_number":       sub.get("subOrderNumber"),
+                    "status_id":              sub.get("statusId"),
+                    "carrier":                sub.get("carrier"),
+                    "tracking_number":        sub.get("trackingNumber"),
+                    "label_id":               sub.get("labelId"),
+                    "delivery_external_id":   sub.get("deliveryExternalId"),
+                    "dispatch_date":          _trim(sub.get("dispatchDate")),
+                    "arrival_date":           _trim(sub.get("arrivalDate")),
+                    "arrival_date_end":       _trim(sub.get("arrivalDateEnd")),
+                    "effective_arrival_date": _trim(sub.get("effectiveArrivalDate")),
+                    "effective_dispatch_date":_trim(sub.get("effectiveDispatchDate")),
+                    "effective_manifest_date":_trim(sub.get("effectiveManifestDate")),
+                    "last_notification_id":   sub.get("lastNotificationId"),
+                    "fulfillment":            sub.get("fulfillment"),
+                    "cost":                   sub.get("cost"),
+                    "updated_at":             _trim(sub.get("updatedAt")),
+                    "summary_id":             sub.get("summaryId"),
+                    "facility_config_id":     sub.get("facilityConfigId"),
+                    "bocbol_order_id":        sub.get("bocbolOrderId"),
+                    "is_splitted":            sub.get("isSplitted"),
+                    "origin_order_number":    sub.get("originOrderNumber"),
+                    "origin_invoice_type":    sub.get("originInvoiceType"),
+                    "origin_order_date":      _trim(sub.get("originOrderDate")),
+                    "origin":                 sub.get("origin"),
+                    "delivery_option_id":     delivery.get("id"),
+                    "delivery_option_name":   delivery.get("name"),
+                    "delivery_option_desc":   delivery.get("description"),
+                    "delivery_option_trans":  delivery.get("translate"),
+                    "status_name":            status.get("name"),
+                    "status_desc":            status.get("description"),
+                    "status_trans":           status.get("translate"),
+                    "status_cancelable":      status.get("cancelable"),
+                    "order_type_id":          sub.get("orderTypeId"),
+                })
+
+                # ── 商品行 ──
+                for item in sub.get("items") or []:
+                    st   = item.get("status") or {}
+                    cat  = item.get("categoryObj") or {}
+
+                    item_rows.append({
+                        "item_id":                item.get("id"),
+                        "sku":                    item.get("sku"),
+                        "name":                   item.get("name"),
+                        "seller_id":              item.get("sellerId"),
+                        "jda_sku":                item.get("jdaSku"),
+                        "base_price":             item.get("basePrice"),
+                        "gross_price":            item.get("grossPrice"),
+                        "price_after_discounts":  item.get("priceAfterDiscounts"),
+                        "tax_rate":               item.get("taxRate"),
+                        "size":                   item.get("size"),
+                        "seller_sku":             item.get("sellerSku"),
+                        "tax":                    item.get("tax"),
+                        "position":               item.get("position"),
+                        "tax_basis":              item.get("taxBasis"),
+                        "commission":             item.get("commission"),
+                        "sub_order_number":       item.get("subOrderNumber"),
+                        "reconditioned":          item.get("reconditioned"),
+                        "cancel_reason_id":       item.get("cancellationReasonId"),
+                        "status_id":              item.get("statusId"),
+                        "image_path":             item.get("imagePath"),
+                        "item_size":              item.get("itemSize"),
+                        "return_id":              item.get("returnId"),
+                        "user_id":                item.get("userId"),
+                        "shipping_cost":          item.get("shippingCost"),
+                        "external_category_id":   item.get("externalCategoryId"),
+                        "status_name":            st.get("name"),
+                        "status_desc":            st.get("description"),
+                        "status_trans":           st.get("translate"),
+                        "status_cancelable":      st.get("cancelable"),
+                        "cancel_reason":          item.get("cancellationReason"),
+                        "return":                 item.get("return"),
+                        "category_obj_id":        cat.get("id"),
+                        "category_obj_name":      cat.get("name"),
+                        "category_obj_code":      cat.get("code"),
+                        "category_obj_weight":    cat.get("weight"),
+                        "category_obj_ext_cat_id":cat.get("externalCategoryId"),
+                        "order_id":               item.get("orderId"),
+                    })
+
         return {
-            "orderData": order_data,
-            "subOrderData": sub_order_data,
-            "itemsData": items_data,
+            "orderRows": order_rows,
+            "subOrderRows": sub_order_rows,
+            "itemRows": item_rows,
         }
+
+    # ── 存储 ──────────────────────────────────────
 
     async def save(self, data: dict):
         if not data:
             return
-        order_data = data.get("orderData") or []
-        sub_order_data = data.get("subOrderData") or []
-        items_data = data.get("itemsData") or []
+        order_rows = data.get("orderRows") or []
+        sub_rows   = data.get("subOrderRows") or []
+        item_rows  = data.get("itemRows") or []
 
-        await DBManager.upsert("", order_data, ["orderId"])
-        subOrderNumbers = [item["subOrderNumber"] for item in order_data]
-        placeholders = ",".join(["%s"] * len(subOrderNumbers))
-        id_map = {item["subOrderNumber"]: item["id"]
-            for item in await DBManager.select(
-                f"SELECT id, subOrderNumber FROM paris_order WHERE orderId IN ({placeholders})",
-                subOrderNumbers)
-        }
+        # order 表
+        await DBManager.upsert("paris_order", order_rows, ["order_id"])
 
-        for item in sub_order_data:
-            item["main_id"] = id_map.get(item["subOrderNumber"])
+        # 查回自增 id，供子表 main_id 外键
+        order_numbers = [r["sub_order_number"] for r in order_rows]
+        placeholders  = ",".join(["%s"] * len(order_numbers))
+        rows = await DBManager.select(
+            f"SELECT id, sub_order_number FROM paris_order "
+            f"WHERE sub_order_number IN ({placeholders})",
+            order_numbers,
+        )
+        id_map = {r["sub_order_number"]: r["id"] for r in rows}
 
-        for item in items_data:
-            item["main_id"] = id_map.get(item["subOrderNumber"])
+        for row in sub_rows:
+            row["main_id"] = id_map.get(row["sub_order_number"])
+        for row in item_rows:
+            row["main_id"] = id_map.get(row["sub_order_number"])
 
-        await DBManager.upsert("", sub_order_data, ["id"])
-        await DBManager.upsert("", items_data, ["id"])
+        if sub_rows:
+            await DBManager.upsert("paris_sub_order", sub_rows, ["sub_order_id"])
+        if item_rows:
+            await DBManager.upsert("paris_order_item", item_rows, ["item_id"])
 
-    async def sync(self, search: dict):
+    # ── 同步 ──────────────────────────────────────
 
+    async def sync(self, session: aiohttp.ClientSession, search: dict):
         datatype = search.get("datatype")
-        at_str = search.pop("at") if search.get("at") is not None else None
-        to_str = search.pop("to") if search.get("to") is not None else None
-        at = datetime.strptime(at_str, "%Y-%m-%d") if at_str else (datetime.now() - timedelta(days=1)).date()
-        to = datetime.strptime(to_str, "%Y-%m-%d") if to_str else datetime.now().date()
+        at_str   = search.pop("at") if search.get("at") is not None else None
+        to_str   = search.pop("to") if search.get("to") is not None else None
+        at       = datetime.strptime(at_str, "%Y-%m-%d") if at_str else (datetime.now() - timedelta(days=1)).date()
+        to       = datetime.strptime(to_str, "%Y-%m-%d") if to_str else datetime.now().date()
 
         while at < to:
             if datatype is not None:
@@ -220,8 +220,8 @@ class Order:
                 search["limit"] = limit
                 search["offset"] = offset
 
-                resp = await self.shop.fetch(
-                    client=self.client, method="GET", url="/v1/orders", params=search
+                resp = await self.shop.request(
+                    session=session, method="GET", url="/v1/orders", params=search
                 )
                 if first:
                     first = False
@@ -230,18 +230,17 @@ class Order:
                         break
                 if resp:
                     offset += limit
-                    resp = self.parse(resp) or {}
-                    await self.save(resp)
+                    parsed = self.parse(resp) or {}
+                    await self.save(parsed)
 
-    async def searchorder(self, search: dict):
+    async def searchorder(self, session: aiohttp.ClientSession, search: dict):
         datatype = search.get("datatype")
-        at_str = search.pop("at") or None if search.get("at") is not None else None
-        to_str = search.pop("to") or None if search.get("to") is not None else None
-        at = datetime.strptime(at_str, "%Y-%m-%d") if at_str else (datetime.now() - timedelta(days=1)).date()
-        to = datetime.strptime(to_str, "%Y-%m-%d") if to_str else  datetime.now().date()
-        if datatype is None:
-            pass
-        else:
+        at_str   = search.pop("at") if search.get("at") is not None else None
+        to_str   = search.pop("to") if search.get("to") is not None else None
+        at       = datetime.strptime(at_str, "%Y-%m-%d") if at_str else (datetime.now() - timedelta(days=1)).date()
+        to       = datetime.strptime(to_str, "%Y-%m-%d") if to_str else datetime.now().date()
+
+        if datatype is not None:
             search.pop("datatype")
             if datatype == 0:
                 search["gteUpdatedAt"] = at.strftime("%Y-%m-%d")
@@ -252,9 +251,10 @@ class Order:
             elif datatype == 2:
                 search["gteCreatedAtInOrigin"] = to.strftime("%Y-%m-%d")
                 search["lteCreatedAtInOrigin"] = to.strftime("%Y-%m-%d")
+
         search["limit"] = 10
         search["offset"] = 0
-        resp = await self.shop.fetch(
-            client=self.client, method="GET", url="/v1/orders", params=search
+        resp = await self.shop.request(
+            session=session, method="GET", url="/v1/orders", params=search
         )
         return resp
