@@ -1,5 +1,5 @@
+import aiomysql
 from typing import Dict, List, Sequence
-
 from app.core.logging import get_logger
 from app.db.pool import pool
 
@@ -24,11 +24,13 @@ class DBManager:
                 return await cur.fetchall()
 
     @classmethod
-    async def insert(cls, table: str, rows: Dict | List) -> int:
+    async def insert(cls, table: str, dicts: Dict | List) -> int:
         """批量插入 (INSERT IGNORE), 返回影响行数。空列表返回 0。"""
-        if not rows:
+        if not dicts:
             return 0
-        dicts = [_to_dict(r) for r in rows]
+        if isinstance(dicts, dict):
+            dicts = [dicts]
+
         cols = list(dicts[0].keys())
         cols_str = ", ".join(_escape_ident(c) for c in cols)
         placeholders = ", ".join(["%s"] * len(cols))

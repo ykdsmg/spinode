@@ -10,13 +10,13 @@ logger = get_logger(__name__)
 class ParisShop:
     def __init__(
         self,
-        seller_id: str,
-        user_id: str,
-        api_key: str,
-        country: str,
-        shop_name: str,
-        shop_code: str,
-        time_zone: str,
+        seller_id: str | None = None,
+        user_id: str | None = None,
+        api_key: str | None = None,
+        country: str | None = None,
+        shop_name: str | None = None,
+        shop_code: str | None = None,
+        time_zone: str | None = None,
     ):
         # ── 店铺基础信息 ──────────────────────────────
         self.seller_id = seller_id
@@ -98,10 +98,9 @@ class ParisShop:
             self_headers = self._headers()
             if self_headers:
                 headers = self_headers.update(headers) if headers else self_headers
-                async with client as client:
-                    resp = await client.request_async(
-                        method=method, url=url, headers=headers, params=params
-                    )
+                resp = await client.request_async(
+                    method=method, url=url, headers=headers, params=params
+                )
                 return await resp.json()
             else:
                 logger.error(f"请求失败: url = {url}, headers = {headers}, params = {params}")

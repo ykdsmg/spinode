@@ -10,9 +10,9 @@ from app.platform.ParisShop import ParisShop
 class Order:
     """商品资源。"""
 
-    def __init__(self, shop: ParisShop, qpm: int | None = None) -> None:
+    def __init__(self, shop: ParisShop, client: HttpClient) -> None:
         self.shop = shop
-        self.client = HttpClient()
+        self.client = client
 
     def parse(self, origin: dict):
         listado = origin.get("data") or []
@@ -237,7 +237,7 @@ class Order:
         datatype = search.get("datatype")
         at_str = search.pop("at") or None if search.get("at") is not None else None
         to_str = search.pop("to") or None if search.get("to") is not None else None
-        at = datetime.strptime(at_str, "%Y-%m-%d") if at_str else (datetime.now() - timedelta(days=1)).date() )
+        at = datetime.strptime(at_str, "%Y-%m-%d") if at_str else (datetime.now() - timedelta(days=1)).date()
         to = datetime.strptime(to_str, "%Y-%m-%d") if to_str else  datetime.now().date()
         if datatype is None:
             pass

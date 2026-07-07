@@ -5,55 +5,79 @@
 """
 import json
 
-from fastapi import APIRouter, HTTPException, Query, Path
-
-from app.api.config import load_paris_shop
+from fastapi import APIRouter, HTTPException, Query, Path, Request, Depends
+from app.http.client import HttpClient
 from app.api.schemas import ApiResponse, PROrderSearch
 from app.resources.paris.order import Order
+from app.platform.ParisShop import ParisShop as Shop
 
 router = APIRouter()
 
-shop_dep = load_paris_shop()
+
+def get_paris_shops(request: Request):
+    return request.app.state.paris_shops
+
 
 # ═════════════════════════════════════════════════════════
-#  Product
+#  Order
 # ═════════════════════════════════════════════════════════
 
 
 @router.get("/paris/shop/order/sync", response_model=ApiResponse)
 async def order_sync(
+    shops=Depends(get_paris_shops),
     searchmodel: PROrderSearch = Query({}, description="商品搜索参数"),
 ):
-    """全量同步商品: 拉取全部 item_id → 并发查详情 → 解析存储。"""
-    search = {k: v for k, v in searchmodel.model_dump().items() if v is not None}
-    for shop in shop_dep.values():
-        try:
-            await Order(shop).sync(search)
-        except Exception:
-            raise HTTPException(
-                status_code=500,
-                detail=f"sync_products failed for shop {shop.seller_id}",
-            )
+    """同步订单"""
+    search = searchmodel.model_dump(exclude_none=True)
 
-    return ApiResponse(success=True, message="sync_products done")
+    for shop in shops.values():
+            try:
+                async with HttpClient() as client:
+                    await Order(shop, client).sync(search)
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"sync paris orders failed for shop {shop.seller_id}: {e}",
+                )
 
-@router.get("/paris/shop/{SELLER_ID}/order/search", response_model=ApiResponse)
+    return ApiResponse(success=True, message="sync paris orders done")
+
+
+
+@router.get("/paris/shop/{seller_id}/order/search",response_model=ApiResponse)
 async def order_search(
-    SELLER_ID: str = Path(description="SELLER ID 必填"),
-    searchmodel: PROrderSearch = Query({}, description="商品搜索参数"),
+    seller_id: str = Path(description="SELLER ID 必填"),
+    shops: dict[str, Shop] = Depends(get_paris_shops),
+    searchmodel: PROrderSearch = Query({}, description="订单搜索参数"),
 ):
-    """全量同步商品: 拉取全部 item_id → 并发查详情 → 解析存储。"""
-    search = {k: v for k, v in searchmodel.model_dump().items() if v is not None}
-    shop = shop_dep.get(SELLER_ID)
+    """
+    查询并保存指定店铺的订单数据
+    """
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+    search = searchmodel.model_dump(exclude_none=True)
+
     try:
-        if not shop:
-            raise HTTPException(status_code=404, detail="shop not found")
-        resp = await Order(shop).searchorder(search)
-        with open(f"data/{SELLER_ID}_order.json", "w", encoding="utf-8") as f:
-            json.dump(resp, f, ensure_ascii=False, indent=4)
-        return ApiResponse(success=True, message="search and save orders done", data=resp)
+        async with HttpClient() as client:
+            resp = await Order(shop, client).searchorder(search)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"search and save orders failed for shop {SELLER_ID}, error: {str(e)}",
+            detail=f"search orders failed for shop {seller_id}: {e}",
         )
+
+    with open(f"data/{seller_id}_order.json", "w", encoding="utf-8") as f:
+        json.dump(resp, f, ensure_ascii=False, indent=4)
+
+    return ApiResponse(
+        success=True,
+        message="search and save orders done",
+        data=resp,
+    )

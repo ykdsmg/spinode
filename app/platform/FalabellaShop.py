@@ -12,13 +12,13 @@ logger = get_logger(__name__)
 class FalabellaShop:
     def __init__(
         self,
-        seller_id: str,
-        user_id: str,
-        api_key: str,
-        business_unit: str,
-        shop_name: str,
-        shop_names: str,
-        integration_type: str | None = "PROPIA",
+        seller_id: str | None = None,
+        user_id: str | None = None,
+        api_key: str | None = None,
+        business_unit: str | None = None,
+        shop_name: str | None = None,
+        shop_names: str | None = None,
+        integration_type: str  = "PROPIA",
         timezone: str | None = None,
     ):
         # ── 店铺基础信息 ──────────────────────────────

@@ -1,36 +1,36 @@
 """
 FastAPI 应用主文件。
 """
+from fastapi            import FastAPI
+from contextlib         import asynccontextmanager
+from app.config         import load_paris_shop, load_falabella_shop, load_mercado_shop
+from app.core.logging   import get_logger,setup_logging
+from app.db.pool        import pool
 
-import time
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
-
-
-from app.api.routers.falabella import router as fl_router
-from app.api.routers.mercado import router as ml_router
-from app.api.routers.paris import router as ps_router
-from app.core.logging import get_logger,setup_logging
-from app.db.pool import pool
+from app.api.routers.falabella  import router as fl_router
+from app.api.routers.mercado    import router as ml_router
+from app.api.routers.paris      import router as ps_router
 
 logger = get_logger(__name__)
 
-_start_time: float = 0.0
+
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期: 启动加载→运行→关闭清理。"""
-    global _start_time
-
 
     # ── startup ───────────────────────
     setup_logging()
     logger.info("fmshop v2.0 (FastAPI) 启动中...")
     await pool.create()
     logger.info("数据库连接池已就绪")
-    _start_time = time.time()
+
+    # load all shops
+    app.state.paris_shops       = await load_paris_shop()
+    app.state.falabella_shops   = await load_falabella_shop()
+    app.state.mercado_shops     = await load_mercado_shop()
+
 
     # ── 服务运行中 ──────────────
     yield
@@ -51,6 +51,6 @@ app = FastAPI(
 )
 
 # ── 注册路由 ─────────────────────────────────────────
-# app.include_router(fl_router, prefix="/api/falabella", tags=["Falabella"])
-# app.include_router(ml_router, prefix="/api/mercado", tags=["Mercado"])
+# app.include_router(fl_router, tags=["Falabella"])
+# app.include_router(ml_router, tags=["Mercado"])
 app.include_router(ps_router, tags=["Paris"])

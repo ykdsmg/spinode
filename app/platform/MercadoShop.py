@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta
 
+from attr import dataclass
 import requests
 
 from app.core.logging import get_logger
@@ -16,17 +17,17 @@ _REFRESH_LEAD_MINUTES = 30
 class MercadoShop:
     def __init__(
         self,
-        app_id: str,
-        secret: str,
-        user_id: str,
-        seller_id: str,
-        shop_name: str,
-        shop_names: str,
-        business_unit: str,
-        timezone: str,
-        access_token: str,
-        refresh_token: str,
-        get_time: str,
+        app_id: str  | None = None,
+        secret: str | None = None,
+        user_id: str | None = None,
+        seller_id: str | None = None,
+        shop_name: str | None = None,
+        shop_names: str | None = None,
+        business_unit: str | None = None,
+        timezone: str | None = None,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        get_time: datetime | None = None,
         expires_in: int = 21600,
     ) -> None:
         # ── 店铺基础信息 ──────────────────────────────
@@ -45,7 +46,10 @@ class MercadoShop:
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.expires_in = expires_in
-        self.get_time = datetime.fromisoformat(get_time)
+        if get_time:
+            self.get_time = get_time
+        else:
+            self.get_time = datetime(1970, 1, 1)
 
         # ── 并发安全 (每个店铺独立锁) ─────────────────
         self._token_lock = asyncio.Lock()
