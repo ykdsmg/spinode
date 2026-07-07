@@ -10,3 +10,4 @@ logs/
 *.zip
 *.png
 data/
+sql/
