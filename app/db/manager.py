@@ -86,6 +86,7 @@ class DBManager:
                 return affected
             except Exception as e:
                 await conn.rollback()
+                logger.error(f"{table} 表 UPSERT 错误: {e}")
                 raise e
 
     @classmethod

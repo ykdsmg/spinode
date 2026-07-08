@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta
+import json
 
 import aiohttp
 from aiolimiter import AsyncLimiter
@@ -78,6 +79,8 @@ class ParisShop:
             async with session.post(url, headers=headers, ssl=False) as resp:
                 if resp.status == 200:
                     req = await resp.json()
+                    with open(f"data/{self.api_key}.json", "w", encoding="utf-8") as f:
+                        json.dump(req, f, ensure_ascii=False, indent=4)
                     self.access_token = req["accessToken"]
                     self.get_time = datetime.now()
                     logger.info("[%s] 刷新 Token 成功", self.seller_id)

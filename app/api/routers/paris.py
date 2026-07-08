@@ -8,7 +8,7 @@ import json
 from fastapi import APIRouter, HTTPException, Query, Path, Request, Depends
 from app.api.schemas import ApiResponse, PROrderSearch
 from app.resources.paris.order import Order
-from app.platform.ParisShop import ParisShop as Shop
+from app.platform.ParisShop import ParisShop
 
 router = APIRouter()
 
@@ -51,7 +51,7 @@ async def order_sync(
 async def order_search(
     request: Request,
     seller_id: str = Path(description="SELLER ID 必填"),
-    shops: dict[str, Shop] = Depends(get_paris_shops),
+    shops: dict[str, ParisShop] = Depends(get_paris_shops),
     searchmodel: PROrderSearch = Query({}, description="订单搜索参数"),
 ):
     """
