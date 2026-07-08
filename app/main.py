@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.http_session = aiohttp.ClientSession(connector=connector)
     logger.info(
-        "全局 HTTP 连接池已就绪 (limit=%s, per_host=%s)",
+        "全局异步 HTTP 连接池已就绪 (limit=%s, per_host=%s)",
         _HTTP_SESSION_LIMIT, _HTTP_SESSION_PER_HOST,
     )
 
@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
 
     # ── shutdown ──────────────────────
     await app.state.http_session.close()
-    logger.info("全局 HTTP 连接池已关闭")
+    logger.info("全局异步 HTTP 连接池已关闭")
     await pool.close()
     logger.info("fmshop 已关闭")
 
