@@ -3,15 +3,26 @@
 路由结构:
 
 """
-import json
+# package
+# import json
 
+# fastapi
 from fastapi import APIRouter, HTTPException, Query, Path, Request, Depends
+
+# basemodel
 from app.api.schemas import ApiResponse, PROrderSearch
-from app.resources.paris.order import Order
+
+# 店铺
 from app.platform.ParisShop import ParisShop
 
-router = APIRouter()
+# 资源
+from app.resources.paris.order import Order
 
+
+
+
+
+router = APIRouter()
 
 def get_paris_shops(request: Request):
     return request.app.state.paris_shops
@@ -65,7 +76,7 @@ async def order_search(
     search = searchmodel.model_dump(exclude_none=True)
 
     try:
-        resp = await Order(shop).searchorder(session, search)
+        resp = await Order(shop).search(session, search)
     except HTTPException:
         raise
     except Exception as e:
@@ -73,9 +84,6 @@ async def order_search(
             status_code=500,
             detail=f"search orders failed for shop {seller_id}: {e}",
         )
-
-    with open(f"data/{seller_id}_order.json", "w", encoding="utf-8") as f:
-        json.dump(resp, f, ensure_ascii=False, indent=4)
 
     return ApiResponse(
         success=True,

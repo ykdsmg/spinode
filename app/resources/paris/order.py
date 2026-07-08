@@ -1,23 +1,21 @@
 """Paris 订单资源: Orders 请求 / 解析 / 存储 / 同步"""
-import json
-
 import aiohttp
-from datetime import datetime, timedelta
+from datetime import timedelta
 from app.db.manager import DBManager
 from app.platform.ParisShop import ParisShop
-
+from typing import Dict, List
 from app.core.converters import _trim
 
 
 class Order:
     """订单资源（无 QPM 需求，直接使用共享 session）。"""
 
-    def __init__(self, shop: ParisShop) -> None:
+    def __init__(self, shop: ParisShop):
         self.shop = shop
 
     # ── 解析 ──────────────────────────────────────
 
-    def parse(self, origin: dict) -> dict:
+    def parse(self, origin: Dict) -> Dict:
         """解析订单 API 响应 → order / sub_order / item 三表数据。"""
         listado = origin.get("data") or []
         if isinstance(listado, dict):
@@ -83,8 +81,9 @@ class Order:
             for sub in subOrders:
                 delivery = sub.get("deliveryOption") or {}
                 status   = sub.get("status") or {}
+                label = sub.get("label")
 
-                sub_order_rows.append({
+                sub_order_row = {
                     "sub_order_id":           sub.get("id"),
                     "sub_order_number":       sub.get("subOrderNumber"),
                     "status_id":              sub.get("statusId"),
@@ -119,8 +118,17 @@ class Order:
                     "status_trans":           status.get("translate"),
                     "status_cancelable":      status.get("cancelable"),
                     "order_type_id":          sub.get("orderTypeId"),
-                })
+                    "zpl":                    None,
+                    "pdf":                    None,
+                }
 
+                if label:
+                    for lab in label:
+                        format = lab.get("format")
+                        if format and format in sub_order_row:
+                            sub_order_row[format] = lab.get("url")
+
+                sub_order_rows.append(sub_order_row)
                 # ── 商品行 ──
                 for item in sub.get("items") or []:
                     st   = item.get("status") or {}
@@ -176,7 +184,7 @@ class Order:
 
     # ── 存储 ──────────────────────────────────────
 
-    async def save(self, data: dict):
+    async def save(self, data: Dict):
         if not data:
             return
         order_rows = data.get("orderRows") or []
@@ -211,88 +219,88 @@ class Order:
         if item_rows:
             await DBManager.upsert("paris_order_item", item_rows, ["seller_id", "item_id"])
 
-
-
-
     # ── 同步 ──────────────────────────────────────
 
-    async def sync(self, session: aiohttp.ClientSession, search: dict):
-        datatype = search.get("datatype")
-        at_str   = search.pop("at") if search.get("at") is not None else None
-        to_str   = search.pop("to") if search.get("to") is not None else None
-        at       = datetime.strptime(at_str, "%Y-%m-%d") if at_str else (datetime.now() - timedelta(days=1)).date()
-        to       = datetime.strptime(to_str, "%Y-%m-%d") if to_str else datetime.now().date()
-        if datatype is None:
-            at = to = datetime.now().date()
+    async def sync(self, session: aiohttp.ClientSession, search: Dict):
 
-        flag = True
-        while flag or at < to:
-            if datatype is not None:
-                if flag:
-                    search.pop("datatype")
-                    flag = False
-                if datatype == 0:
-                    search["gteUpdatedAt"] = at.strftime("%Y-%m-%d")
-                    at += timedelta(days=1)
-                    search["lteUpdatedAt"] = at.strftime("%Y-%m-%d")
-                elif datatype == 1:
-                    search["gteCreatedAt"] = at.strftime("%Y-%m-%d")
-                    at += timedelta(days=1)
-                    search["lteCreatedAt"] = at.strftime("%Y-%m-%d")
-                elif datatype == 2:
-                    search["gteCreatedAtInOrigin"] = at.strftime("%Y-%m-%d")
-                    at += timedelta(days=1)
-                    search["lteCreatedAtInOrigin"] = at.strftime("%Y-%m-%d")
-            else:
-                flag = False
+        params_list = Order._build_params_(search)
 
+        for params in params_list:
             limit = 100
             offset = 0
-            count = 0
-            first = True
-
-            while first or offset < count:
-                search["limit"] = limit
-                search["offset"] = offset
+            total = None
+            while total is None or offset < total:
+                params.update(limit=limit, offset=offset)
 
                 resp = await self.shop.request(
-                    session=session, method="GET", url="/v1/orders", params=search
+                    session=session,
+                    method="GET",
+                    url="/v1/orders",
+                    params=params,
                 )
 
-                if first:
-                    first = False
-                    count = int(resp.get("count", 0)) or 0
-                    if count == 0:
+                if total is None:
+                    total = int(resp.get("count", 0))
+                    if total == 0:
                         break
-                if resp:
-                    offset += limit
-                    parsed = self.parse(resp) or {}
-                    with open(f"data/parsed_orders_{offset}.json", "w", encoding="utf-8") as f:
-                        json.dump(parsed, f, ensure_ascii=False, indent=4)
-                    await self.save(parsed)
 
-    async def searchorder(self, session: aiohttp.ClientSession, search: dict):
+                data = resp.get("data") or []
+                if not data:
+                    break
+
+                parsed = self.parse(resp) or {}
+                await self.save(parsed)
+                offset += limit
+
+
+    async def search(self, session: aiohttp.ClientSession, search: Dict):
+
+        params = Order._build_params_(search)[0]
+
+        resp = await self.shop.request(
+            session=session,
+            method="GET",
+            url="/v1/orders",
+            params=params,
+        )
+
+        return resp
+
+
+    @staticmethod
+    def _build_params_(search: Dict) -> List:
+
         datatype = search.get("datatype")
-        at_str   = search.pop("at") if search.get("at") is not None else None
-        to_str   = search.pop("to") if search.get("to") is not None else None
-        at       = datetime.strptime(at_str, "%Y-%m-%d") if at_str else (datetime.now() - timedelta(days=1)).date()
-        to       = datetime.strptime(to_str, "%Y-%m-%d") if to_str else datetime.now().date()
+        at = search.get("at")
+        to = search.get("to")
+
+        params = {k: v for k, v in search.items() if k not in ("at", "to", "datatype")}
 
         if datatype is not None:
-            search.pop("datatype")
-            if datatype == 0:
-                search["gteUpdatedAt"] = at.strftime("%Y-%m-%d")
-                search["lteUpdatedAt"] = to.strftime("%Y-%m-%d")
-            elif datatype == 1:
-                search["gteCreatedAt"] = at.strftime("%Y-%m-%d")
-                search["lteCreatedAt"] = to.strftime("%Y-%m-%d")
-            elif datatype == 2:
-                search["gteCreatedAtInOrigin"] = to.strftime("%Y-%m-%d")
-                search["lteCreatedAtInOrigin"] = to.strftime("%Y-%m-%d")
 
-        search["limit"] = 10
-        search["offset"] = 0
-        resp = await self.shop.request(
-            session=session, method="GET", url="/v1/orders", params=search
-        )
-        return resp
+            params_list = []
+
+            date_fields = {
+                0: ("gteUpdatedAt", "lteUpdatedAt"),
+                1: ("gteCreatedAt", "lteCreatedAt"),
+                2: ("gteCreatedAtInOrigin", "lteCreatedAtInOrigin"),
+            }
+
+            if datatype not in date_fields:
+                raise ValueError(f"不支持的 datatype: {datatype}")
+
+            gte_key, lte_key = date_fields[datatype]
+
+            if at and to:
+                current = at
+                while current < to:
+                    params[gte_key] = current.strftime("%Y-%m-%d")
+                    params[lte_key] = (current + timedelta(days=1)).strftime("%Y-%m-%d")
+                    params_list.append(params.copy())
+                    current += timedelta(days=1)
+
+                return params_list
+            else:
+                raise ValueError("at 和 to 必须同时提供")
+        else:
+            return [params]

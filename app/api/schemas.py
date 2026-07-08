@@ -89,8 +89,8 @@ class PROrderSearch(BaseModel):
     subOrderNumber: str | None = None
     sellerId: str | None = None
     datatype: int | None = None
-    at: str | None = None
-    to: str | None = None
+    at: datetime | None = None
+    to: datetime | None = None
     customerDocument: str | None = None
     status: int | None = None
     itemStatus: list[str] | None = None
