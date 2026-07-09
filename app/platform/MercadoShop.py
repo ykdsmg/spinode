@@ -88,7 +88,7 @@ class MercadoShop:
         async with self._token_lock:
             if not self._should_refresh:          # double-check
                 return
-            await self._refresh_token(session)
+            # await self._refresh_token(session)
 
     async def _refresh_token(self, session: aiohttp.ClientSession):
         """使用全局 aiohttp session 异步刷新 OAuth Token 并写 DB。"""

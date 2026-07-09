@@ -73,5 +73,5 @@ app = FastAPI(
 
 # ── 注册路由 ─────────────────────────────────────────
 # app.include_router(fl_router, tags=["Falabella"])
-# app.include_router(ml_router, tags=["Mercado"])
+app.include_router(ml_router, tags=["Mercado"])
 app.include_router(ps_router, tags=["Paris"])

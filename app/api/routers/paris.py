@@ -24,7 +24,7 @@ from app.resources.paris.order import Order
 
 router = APIRouter()
 
-def get_paris_shops(request: Request):
+def get_shops(request: Request):
     return request.app.state.paris_shops
 
 
@@ -36,7 +36,7 @@ def get_paris_shops(request: Request):
 @router.get("/paris/shop/order/sync", response_model=ApiResponse)
 async def order_sync(
     request: Request,
-    shops=Depends(get_paris_shops),
+    shops=Depends(get_shops),
     searchmodel: PROrderSearch = Query({}, description="商品搜索参数"),
 ):
     """同步订单"""
@@ -62,7 +62,7 @@ async def order_sync(
 async def order_search(
     request: Request,
     seller_id: str = Path(description="SELLER ID 必填"),
-    shops: dict[str, ParisShop] = Depends(get_paris_shops),
+    shops: dict[str, ParisShop] = Depends(get_shops),
     searchmodel: PROrderSearch = Query({}, description="订单搜索参数"),
 ):
     """
