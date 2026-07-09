@@ -5,6 +5,7 @@ Mercado 订单资源:请求/解析/存储/同步。
 import aiohttp
 import asyncio
 from app.db.manager import DBManager
+from datetime import datetime, timedelta
 from app.platform.MercadoShop import MercadoShop
 from typing import Dict, List
 from app.core.converters import _trim, _json, _str
@@ -16,7 +17,47 @@ class Order:
     def __init__(self, shop: MercadoShop):
         self.shop = shop
 
-    # ── parse ──────────────────────────────────────────
+    @staticmethod
+    def _build_params_(search: Dict) -> List:
+
+        datatype = search.get("datatype")
+        at = search.get("at")
+        to = search.get("to")
+
+        params = {k: v for k, v in search.items() if k not in ("at", "to", "datatype")}
+
+        if datatype is not None:
+
+            params_list = []
+
+            date_fields = {
+                0: ("order.date_last_updated.from", "order.date_last_updated.to"),
+                1: ("order.date_created.from", "order.date_created.to"),
+                2: ("order.date_closed.from", "order.date_closed.to"),
+            }
+
+            if datatype not in date_fields:
+                raise ValueError(f"不支持的 datatype: {datatype}")
+
+            gte_key, lte_key = date_fields[datatype]
+
+            if at and to:
+                current_at = at
+                while current_at < to:
+                    current_to = current_at + timedelta(days=1)
+                    if current_to > to:
+                        current_to = to
+                    params[gte_key] = current_at.strftime("%Y-%m-%d")
+                    params[lte_key] = current_to.strftime("%Y-%m-%d")
+                    params_list.append(params.copy())
+                    current_at += timedelta(days=1)
+
+                return params_list
+            else:
+                raise ValueError("at 和 to 必须同时提供")
+        else:
+            return [params]
+
 
     def parse_order(self, results: Dict):
 
@@ -174,4 +215,90 @@ class Order:
             "payments": payment_rows,
         }
 
-    # ── store ──────────────────────────────────────────
+
+    async def save_order(self, data: Dict):
+        pass
+
+
+    async def search_order_by_id(self, session: aiohttp.ClientSession, order_id: str):
+
+        resp = await self.shop.request(
+            session=session,
+            method="GET",
+            url=f"/orders/{order_id}",
+            headers={
+                "Content-Type": "application/json",
+            }
+        )
+        return resp
+
+
+    async def search_order(self, session: aiohttp.ClientSession, search: Dict):
+
+        datatype = search.get("datatype")
+        at = search.get("at")
+        to = search.get("to")
+
+        params = {k: v for k, v in search.items() if k not in ("at", "to", "datatype")}
+
+
+        date_fields = {
+            0: ("order.date_last_updated.from", "order.date_last_updated.to"),
+            1: ("order.date_created.from", "order.date_created.to"),
+            2: ("order.date_closed.from", "order.date_closed.to"),
+        }
+
+        if datatype not in date_fields:
+            raise ValueError(f"不支持的 datatype: {datatype}")
+
+        gte_key, lte_key = date_fields[datatype]
+
+        if at and to:
+            params[gte_key] = at
+            params[lte_key] = to
+
+        resp = await self.shop.request(
+            session=session,
+            method="GET",
+            url="/orders",
+            params=params,
+            headers={
+                "Content-Type": "application/json",
+            }
+        )
+        return resp
+
+
+    async def sync_order(self, session: aiohttp.ClientSession, search: Dict):
+
+        params_list = Order._build_params_(search)
+
+
+        for params in params_list:
+
+            limit = 50
+            offset = 0
+            total = None
+
+            while total is None or offset < total:
+
+                resp = await self.shop.request(
+                    session=session,
+                    method="GET",
+                    url="/orders",
+                    params={**params, "limit": limit, "offset": offset},
+                    headers={
+                        "Content-Type": "application/json",
+                    }
+                )
+
+                if total is None:
+                    total = (resp.get("paging") or {}).get("total",0) or 0
+                    if total == 0:
+                        break
+
+                if not resp.get("results"):
+                    break
+
+                parsed = self.parse_order(resp)
+                await self.save_order(parsed)

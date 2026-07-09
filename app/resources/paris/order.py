@@ -292,12 +292,15 @@ class Order:
             gte_key, lte_key = date_fields[datatype]
 
             if at and to:
-                current = at
-                while current < to:
-                    params[gte_key] = current.strftime("%Y-%m-%d")
-                    params[lte_key] = (current + timedelta(days=1)).strftime("%Y-%m-%d")
+                current_at = at
+                while current_at < to:
+                    current_to = current_at + timedelta(days=1)
+                    if current_to > to:
+                        current_to = to
+                    params[gte_key] = current_at.strftime("%Y-%m-%d")
+                    params[lte_key] = current_to.strftime("%Y-%m-%d")
                     params_list.append(params.copy())
-                    current += timedelta(days=1)
+                    current_at = current_to
 
                 return params_list
             else:

@@ -70,13 +70,18 @@ class FLStockSearch(BaseModel):
 class MLOrderSearch(BaseModel):
     """订单搜索参数。"""
 
-    date_type: int = 0
-    at: str = Field(default_factory=lambda: datetime.now().isoformat())
-    to: str = Field(default_factory=lambda: datetime.now().isoformat())
-    sort: str | None = None
-    item: str | None = None
-    status: str | None = None
-    seller: str | None = None
+    datatype:  int | None = 0
+    at:   datetime | None = None
+    to:   datetime | None = None
+    sort:      str | None = None
+    item:      str | None = None
+    status:    str | None = None
+    seller:    str | None = None
+    limit:     int | None = None
+    offset:    int | None = None
+    tags:      str | None = None
+    q:         str | None = None
+
 
 
 

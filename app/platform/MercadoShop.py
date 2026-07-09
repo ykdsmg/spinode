@@ -4,13 +4,11 @@
 - OAuth2 Token 过期自动刷新（线程安全），刷新也用 aiohttp。
 - 统一通过 request() 发送请求，自带 token 刷新 + 重试 + 可选限流。
 """
-
 import asyncio
-from datetime import datetime, timedelta
-
 import aiohttp
+import urllib.parse
 from aiolimiter import AsyncLimiter
-
+from datetime import datetime, timedelta
 from app.core.logging import get_logger
 from app.db.manager import DBManager
 from app.http.retry import (
@@ -153,6 +151,7 @@ class MercadoShop:
         backoff_factor: float = 1.0,
         timeout: int = 60,
         headers: dict | None = None,
+        params:  dict | None = None,
         **kwargs,
     ) -> dict:
         """统一 HTTP 请求入口，自带 token 刷新 + 重试 + 可选限流。
@@ -186,6 +185,8 @@ class MercadoShop:
 
         # ── 3. 拼接完整 URL ─────────────────────────
         full_url = f"{self.base_url}{url}"
+        if params:
+            full_url += "?" + urllib.parse.urlencode(params,doseq=True)
 
         # ── 4. 重试 + 可选限流 ─────────────────────
         @build_retry_decorator(max_retries, backoff_factor)
