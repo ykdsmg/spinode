@@ -12,7 +12,7 @@ class ApiResponse(BaseModel):
 
     success: bool = True
     message: str = ""
-    data: dict | None = None
+    data: dict | list | None = None
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -22,7 +22,7 @@ class ErrorResponse(BaseModel):
     success: bool = False
     message: str
     error_code: str = "UNKNOWN"
-    detail: dict | None = None
+    detail: dict | list | None = None
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 

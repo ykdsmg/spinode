@@ -152,6 +152,7 @@ class MercadoShop:
         max_retries: int = 5,
         backoff_factor: float = 1.0,
         timeout: int = 60,
+        other_url: str | None = None,
         headers: dict | None = None,
         params:  dict | None = None,
         **kwargs,
@@ -186,7 +187,12 @@ class MercadoShop:
             merged_headers.update(headers)
 
         # ── 3. 拼接完整 URL ─────────────────────────
-        full_url = f"{self.base_url}{url}"
+
+        if other_url:
+            full_url = f"{other_url}{url}"
+        else:
+            full_url = f"{self.base_url}{url}"
+
         if params:
             full_url += "?" + urllib.parse.urlencode(params,doseq=True)
 

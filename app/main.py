@@ -55,15 +55,15 @@ async def lifespan(app: FastAPI):
     yield
 
     # ── shutdown ──────────────────────
-    await app.state.http_session.close()
+    await aiohttp_session.close()
     logger.info("全局异步 HTTP 连接池已关闭")
     await pool.close()
-    logger.info("fmshop 已关闭")
+    logger.info("spinode 已关闭")
 
 
 # ── FastAPI 实例 ────────────────────────────────────
 app = FastAPI(
-    title="fmshop API",
+    title="spinode API",
     description="多电商平台数据同步系统 — REST API",
     version="2.0.0",
     lifespan=lifespan,

@@ -389,6 +389,7 @@ class Order:
         resp = await self.shop.request(
             method="GET",
             url=f"/v1/payments/{PAYMENT_ID}",
+            other_url="https://api.mercadopago.com",
             headers={
                 "Content-Type": "application/json",
                 "X-Format-New": "true",
