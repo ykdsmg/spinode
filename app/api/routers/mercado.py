@@ -2,7 +2,19 @@
 Mercado Libre 路由: 商品/变体/订单/货运/库存/评价/账单/广告 共 7 个资源。
 
 路由结构:
-  GET /{shop_id}/order/sync                                       — 全量同步订单
+  GET /mercado/ads/advertisers/sync                                — 全量同步广告主
+  GET /mercado/ads/advertisers/search                              — 搜索广告主
+  GET /mercado/ads/adgroups/sync                                   — 全量同步广告组
+  GET /mercado/ads/adgroups/search                                 — 搜索广告组
+  GET /mercado/ads/adgroups/details/sync                           — 全量同步广告组详情
+  GET /mercado/ads/adgroup/details/search                          — 搜索广告组详情
+  GET /mercado/order/sync                                          — 全量同步订单
+  GET /mercado/order/search                                        — 搜索订单
+  GET /mercado/order/{order_id}                                    — 获取单个订单
+  GET /mercado/shipment/{shipment_id}                              — 获取货运详情
+  GET /mercado/shipment/{shipment_id}/history                      — 获取货运历史
+  GET /mercado/shipment/{shipment_id}/sla                          — 获取货运SLA
+  GET /mercado/payment/{payment_id}                                — 获取支付详情
 
 """
 # package
@@ -12,11 +24,12 @@ Mercado Libre 路由: 商品/变体/订单/货运/库存/评价/账单/广告 �
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
 
 # basemodel
-from app.api.schemas import ApiResponse
+from app.api.schemas import ApiResponse, MLOrderSearch
 
 
 # 资源
 from app.resources.mercado.advertise import Advertise
+from app.resources.mercado.order import Order
 
 router = APIRouter()
 def get_shops(request: Request):
@@ -191,5 +204,224 @@ async def adgroups_details_search(
     return ApiResponse(
         success=True,
         message="successfully get Mercado adgroup_details",
+        data=resp,
+    )
+
+# ═════════════════════════════════════════════════════════
+# Order
+# ═════════════════════════════════════════════════════════
+
+@router.get("/mercado/order/sync", response_model=ApiResponse)
+async def order_sync(
+    shops=Depends(get_shops),
+    seller_id: int = Query(None, description="同步指定店铺, 默认None同步所有店铺"),
+    search: MLOrderSearch = Depends(),
+):
+    """全量同步订单: 按日期范围分页拉取 → 解析 → 存储订单/商品/支付 → 并发拉取货运详情。"""
+
+    targets = [shops.get(seller_id)] if seller_id else shops.values()
+
+    search_dict = search.model_dump(exclude_none=True)
+
+    for shop in targets:
+        try:
+            await Order(shop).sync_order(search_dict)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"sync mercado orders failed for shop {shop.seller_id}: {e}",
+            )
+
+    return ApiResponse(success=True, message="sync mercado orders done")
+
+
+@router.get("/mercado/order/search", response_model=ApiResponse)
+async def order_search(
+    shops=Depends(get_shops),
+    seller_id: int = Query(),
+    search: MLOrderSearch = Depends(),
+):
+    """搜索订单。"""
+
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    search_dict = search.model_dump(exclude_none=True)
+
+    try:
+        resp = await Order(shop).search_order(search_dict)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"search mercado orders failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully get mercado orders",
+        data=resp,
+    )
+
+
+@router.get("/mercado/order/{order_id}", response_model=ApiResponse)
+async def order_get(
+    order_id: str,
+    shops=Depends(get_shops),
+    seller_id: int = Query(),
+):
+    """获取单个订单详情。"""
+
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Order(shop).get_order(order_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"get mercado order failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully get mercado order",
+        data=resp,
+    )
+
+
+# ═════════════════════════════════════════════════════════
+# Shipment
+# ═════════════════════════════════════════════════════════
+
+@router.get("/mercado/shipment/{shipment_id}", response_model=ApiResponse)
+async def shipment_get(
+    shipment_id: str,
+    shops=Depends(get_shops),
+    seller_id: int = Query(),
+):
+    """获取货运详情。"""
+
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Order(shop).get_shipment(shipment_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"get mercado shipment failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully get mercado shipment",
+        data=resp,
+    )
+
+
+@router.get("/mercado/shipment/{shipment_id}/history", response_model=ApiResponse)
+async def shipment_history_get(
+    shipment_id: str,
+    shops=Depends(get_shops),
+    seller_id: int = Query(),
+):
+    """获取货运历史。"""
+
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Order(shop).get_shipment_history(shipment_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"get mercado shipment history failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully get mercado shipment history",
+        data=resp,
+    )
+
+
+@router.get("/mercado/shipment/{shipment_id}/sla", response_model=ApiResponse)
+async def shipment_sla_get(
+    shipment_id: str,
+    shops=Depends(get_shops),
+    seller_id: int = Query(),
+):
+    """获取货运SLA。"""
+
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Order(shop).get_shipment_sla(shipment_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"get mercado shipment sla failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully get mercado shipment sla",
+        data=resp,
+    )
+
+
+# ═════════════════════════════════════════════════════════
+# Payment
+# ═════════════════════════════════════════════════════════
+
+@router.get("/mercado/payment/{payment_id}", response_model=ApiResponse)
+async def payment_get(
+    payment_id: str,
+    shops=Depends(get_shops),
+    seller_id: int = Query(),
+):
+    """获取支付详情。"""
+
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Order(shop).get_payment(payment_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"get mercado payment failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully get mercado payment",
         data=resp,
     )
