@@ -32,6 +32,7 @@ class MercadoShop:
 
     def __init__(
         self,
+        http: aiohttp.ClientSession,
         app_id: str | None = None,
         secret: str | None = None,
         user_id: str | None = None,
@@ -62,6 +63,8 @@ class MercadoShop:
         self.expires_in = expires_in
         self.get_time = get_time or datetime(1970, 1, 1)
 
+        self.http = http
+
         # 并发安全
         self._token_lock = asyncio.Lock()
 
@@ -79,16 +82,16 @@ class MercadoShop:
             minutes=_REFRESH_LEAD_MINUTES
         )
 
-    async def valid_token(self, session: aiohttp.ClientSession):
+    async def valid_token(self):
         """保证 access_token 有效。过期则自动刷新（线程安全）。"""
         if not self._should_refresh:
             return
         async with self._token_lock:
             if not self._should_refresh:          # double-check
                 return
-            # await self._refresh_token(session)
+            # await self._refresh_token()
 
-    async def _refresh_token(self, session: aiohttp.ClientSession):
+    async def _refresh_token(self):
         """使用全局 aiohttp session 异步刷新 OAuth Token 并写 DB。"""
         headers = {
             "accept": "application/json",
@@ -103,7 +106,7 @@ class MercadoShop:
         old_refresh = self.refresh_token
 
         try:
-            async with session.post(
+            async with self.http.post(
                 self.token_url, headers=headers, data=data, ssl=False,
             ) as resp:
                 if resp.status != 200:
@@ -142,7 +145,6 @@ class MercadoShop:
 
     async def request(
         self,
-        session: aiohttp.ClientSession,
         method: str,
         url: str,
         *,
@@ -176,7 +178,7 @@ class MercadoShop:
             dict — JSON 响应体，失败时返回空 dict。
         """
         # ── 1. 刷新 token ──────────────────────────
-        await self.valid_token(session)
+        await self.valid_token()
 
         # ── 2. 合并 headers ─────────────────────────
         merged_headers = self._build_headers()
@@ -192,7 +194,7 @@ class MercadoShop:
         @build_retry_decorator(max_retries, backoff_factor)
         async def _attempt() -> aiohttp.ClientResponse:
             async def _send() -> aiohttp.ClientResponse:
-                return await session.request(
+                return await self.http.request(
                     method, full_url,
                     timeout=aiohttp.ClientTimeout(total=timeout),
                     headers=merged_headers,

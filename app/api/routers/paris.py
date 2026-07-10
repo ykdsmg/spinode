@@ -35,17 +35,15 @@ def get_shops(request: Request):
 
 @router.get("/paris/shop/order/sync", response_model=ApiResponse)
 async def order_sync(
-    request: Request,
     shops=Depends(get_shops),
     searchmodel: PROrderSearch = Query({}, description="商品搜索参数"),
 ):
     """同步订单"""
-    session = request.app.state.http_session
     search = searchmodel.model_dump(exclude_none=True)
 
     for shop in shops.values():
             try:
-                await Order(shop).sync(session, search)
+                await Order(shop).sync(search)
             except HTTPException:
                 raise
             except Exception as e:
@@ -60,7 +58,6 @@ async def order_sync(
 
 @router.get("/paris/shop/{seller_id}/order/search",response_model=ApiResponse)
 async def order_search(
-    request: Request,
     seller_id: str = Path(description="SELLER ID 必填"),
     shops: dict[str, ParisShop] = Depends(get_shops),
     searchmodel: PROrderSearch = Query({}, description="订单搜索参数"),
@@ -71,12 +68,11 @@ async def order_search(
     if seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
 
-    session = request.app.state.http_session
     shop = shops[seller_id]
     search = searchmodel.model_dump(exclude_none=True)
 
     try:
-        resp = await Order(shop).search(session, search)
+        resp = await Order(shop).search(search)
     except HTTPException:
         raise
     except Exception as e:

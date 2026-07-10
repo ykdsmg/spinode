@@ -1,5 +1,4 @@
 """Mercado 广告资源: Orders 请求 / 解析 / 存储 / 同步"""
-import aiohttp
 import asyncio
 from app.db.manager import DBManager
 from app.platform.MercadoShop import MercadoShop
@@ -14,10 +13,9 @@ class Advertise:
         self.shop = shop
 
 
-    async def get_advertisers(self, session: aiohttp.ClientSession, PRODUCT_ID: str):
+    async def get_advertisers(self, PRODUCT_ID: str):
 
         resp = await self.shop.request(
-            session=session,
             method="GET",
             url=f"/advertising/advertisers?product_id={PRODUCT_ID}",
             headers={
@@ -28,7 +26,8 @@ class Advertise:
 
         return resp
 
-    async def get_adgroups(self, session: aiohttp.ClientSession, ADVERTISER_SITE_ID: str, ADVERTISER_ID: str, limit: int = 100, offset: int = 0, DATA_AT: str | None = None, DATA_TO: str | None = None):
+
+    async def get_adgroups(self, ADVERTISER_SITE_ID: str, ADVERTISER_ID: str, limit: int = 100, offset: int = 0, DATA_AT: str | None = None, DATA_TO: str | None = None):
 
         metrics = "metrics=CLICKS,PRINTS,COST,CPC,CTR,DIRECT_AMOUNT,INDIRECT_AMOUNT,TOTAL_AMOUNT,DIRECT_UNITS_QUANTITY,INDIRECT_UNITS_QUANTITY,UNITS_QUANTITY,DIRECT_ITEMS_QUANTITY,INDIRECT_ITEMS_QUANTITY,ADVERTISING_ITEMS_QUANTITY,ORGANIC_UNITS_QUANTITY,ORGANIC_UNITS_AMOUNT,ORGANIC_ITEMS_QUANTITY,ACOS"
 
@@ -39,7 +38,6 @@ class Advertise:
             metrics = ""
 
         resp = await self.shop.request(
-            session=session,
             method="GET",
             url=f"/advertising/{ADVERTISER_SITE_ID}/advertisers/{ADVERTISER_ID}/product_ads/ad_groups/search?{data_filter}&limit={limit}&offset={offset}&{metrics}",
             headers={
@@ -50,12 +48,12 @@ class Advertise:
 
         return resp
 
-    async def get_adgroup_details(self, session: aiohttp.ClientSession, ADVERTISER_SITE_ID: str, AD_GROUP_ID: str, DATA_AT: str, DATA_TO: str):
+
+    async def get_adgroup_details(self, ADVERTISER_SITE_ID: str, AD_GROUP_ID: str, DATA_AT: str, DATA_TO: str):
 
         metrics = "metrics=CLICKS,PRINTS,COST,CPC,CTR,DIRECT_AMOUNT,INDIRECT_AMOUNT,TOTAL_AMOUNT,DIRECT_UNITS_QUANTITY,INDIRECT_UNITS_QUANTITY,UNITS_QUANTITY,DIRECT_ITEMS_QUANTITY,INDIRECT_ITEMS_QUANTITY,ADVERTISING_ITEMS_QUANTITY,ORGANIC_UNITS_QUANTITY,ORGANIC_UNITS_AMOUNT,ORGANIC_ITEMS_QUANTITY,ACOS"
 
         resp = await self.shop.request(
-            session=session,
             method="GET",
             url=f"/advertising/{ADVERTISER_SITE_ID}/product_ads/ad_groups/{AD_GROUP_ID}?date_from={DATA_AT}&date_to={DATA_TO}&aggregation_type=daily&{metrics}",
             headers={
@@ -65,9 +63,10 @@ class Advertise:
 
         return resp
 
-    async def sync_advertisers(self, session: aiohttp.ClientSession, PRODUCT_ID: str):
 
-        resp = await self.get_advertisers(session, PRODUCT_ID)
+    async def sync_advertisers(self, PRODUCT_ID: str):
+
+        resp = await self.get_advertisers(PRODUCT_ID)
 
         advertisers = resp.get("advertisers", [])
 
@@ -83,9 +82,10 @@ class Advertise:
             })
         await DBManager.upsert("mercado_advertiser", parsed, conflict_cols=["seller_id", "advertiser_id"])
 
-    async def sync_adgroups(self, session: aiohttp.ClientSession):
 
-        advertisers = await self.get_advertisers(session, "PADS")
+    async def sync_adgroups(self):
+
+        advertisers = await self.get_advertisers("PADS")
         advertisers = advertisers.get("advertisers", [])
 
 
@@ -98,7 +98,7 @@ class Advertise:
             total = None
 
             while total is None or offset < total:
-                resp = await self.get_adgroups(session, site_id, advertiser_id, limit, offset)
+                resp = await self.get_adgroups(site_id, advertiser_id, limit, offset)
 
                 if total is None:
                     total = int((resp.get("paging") or {}).get("total", 0))
@@ -116,7 +116,8 @@ class Advertise:
 
                 offset += limit
 
-    async def sync_adgroup_details(self, session: aiohttp.ClientSession, data_at: str, data_to: str):
+
+    async def sync_adgroup_details(self, data_at: str, data_to: str):
         seller_id = self.shop.seller_id
 
         adgroups = await DBManager.select("select id,site_id,adgroup_id from mercado_adgroup where seller_id = %s", [seller_id])
@@ -125,7 +126,7 @@ class Advertise:
         for adgroup in adgroups:
             adgroup_id = adgroup["adgroup_id"]
             site_id = adgroup["site_id"]
-            task.append(self.get_adgroup_details(session, site_id, adgroup_id, data_at, data_to))
+            task.append(self.get_adgroup_details(site_id, adgroup_id, data_at, data_to))
 
         results = await asyncio.gather(*task, return_exceptions=True)
 
@@ -139,6 +140,7 @@ class Advertise:
                 parsed_list.extend(parsed)
 
         await DBManager.upsert("mercado_adgroup_details", parsed_list,["main_id","ad_date"])
+
 
     def parse_adgroups(self, data: List) -> List:
         parsed = []
@@ -167,6 +169,7 @@ class Advertise:
                 "tags":                     _json(item.get("tags"))
             })
         return parsed
+
 
     def parse_adgroup_details(self, data: Dict, main_id: int) -> List:
         results = data.get("results") or []

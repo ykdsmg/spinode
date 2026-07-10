@@ -39,16 +39,16 @@ async def lifespan(app: FastAPI):
         enable_cleanup_closed=True,
         ssl=False,
     )
-    app.state.http_session = aiohttp.ClientSession(connector=connector)
+    aiohttp_session = aiohttp.ClientSession(connector=connector)
     logger.info(
         "全局异步 HTTP 连接池已就绪 (limit=%s, per_host=%s)",
         _HTTP_SESSION_LIMIT, _HTTP_SESSION_PER_HOST,
     )
 
     # load all shops
-    app.state.paris_shops       = await load_paris_shop()
+    app.state.paris_shops       = await load_paris_shop(aiohttp_session)
     app.state.falabella_shops   = await load_falabella_shop()
-    app.state.mercado_shops     = await load_mercado_shop()
+    app.state.mercado_shops     = await load_mercado_shop(aiohttp_session)
 
 
     # ── 服务运行中 ──────────────

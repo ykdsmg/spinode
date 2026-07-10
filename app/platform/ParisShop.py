@@ -21,7 +21,8 @@ class ParisShop:
 
     def __init__(
         self,
-        seller_id: str | None = None,
+        http: aiohttp.ClientSession,
+        seller_id: str,
         user_id: str | None = None,
         api_key: str | None = None,
         country: str | None = None,
@@ -41,6 +42,8 @@ class ParisShop:
         self.get_time = None
         self.base_url = "https://api-developers.ecomm.cencosud.com"
 
+        self.http = http
+
         self._token_lock = asyncio.Lock()
 
     # ═══════════════════════════════════════════════
@@ -56,16 +59,16 @@ class ParisShop:
         """是否需要刷新（提前 10 分钟）。"""
         return datetime.now() >= self._expires_at() - timedelta(minutes=10)
 
-    async def valid_token(self, session: aiohttp.ClientSession):
+    async def valid_token(self):
         """保证 access_token 有效，过期则自动刷新（线程安全）。"""
         if not self._should_refresh():
             return
         async with self._token_lock:
             if not self._should_refresh():
                 return
-            await self._refresh_token(session)
+            await self._refresh_token()
 
-    async def _refresh_token(self, session: aiohttp.ClientSession):
+    async def _refresh_token(self):
         """使用全局 session 异步刷新 Token。"""
         url = f"{self.base_url}/v1/auth/apiKey"
         headers = {
@@ -73,7 +76,7 @@ class ParisShop:
             "Authorization": f"Bearer {self.api_key}",
         }
         try:
-            async with session.post(url, headers=headers, ssl=False) as resp:
+            async with self.http.post(url, headers=headers, ssl=False) as resp:
                 if resp.status == 200:
                     req = await resp.json()
                     self.access_token = req["accessToken"]
@@ -91,7 +94,6 @@ class ParisShop:
 
     async def request(
         self,
-        session: aiohttp.ClientSession,
         method: str,
         url: str,
         *,
@@ -124,7 +126,7 @@ class ParisShop:
             dict — JSON 响应体，失败时返回空 dict。
         """
         # ── 1. 刷新 token ──────────────────────────
-        await self.valid_token(session)
+        await self.valid_token()
 
         # ── 2. 构建 headers ─────────────────────────
         merged_headers = {"Accept": "application/json"}
@@ -141,7 +143,7 @@ class ParisShop:
         @build_retry_decorator(max_retries, backoff_factor)
         async def _attempt() -> aiohttp.ClientResponse:
             async def _send() -> aiohttp.ClientResponse:
-                return await session.request(
+                return await self.http.request(
                     method, full_url,
                     timeout=aiohttp.ClientTimeout(total=timeout),
                     headers=merged_headers,

@@ -29,18 +29,17 @@ def get_shops(request: Request):
 
 @router.get("/mercado/ads/advertisers/sync", response_model=ApiResponse)
 async def advertise_sync(
-    request: Request,
     shops=Depends(get_shops),
     seller_id: int = Query(None, description="同步指定店铺, 默认None同步所有店铺"),
     PRODUCT_ID: str = Query(),
 ):
     """全量同步商品: 拉取全部 item_id → 并发查详情 → 解析存储。"""
-    session = request.app.state.http_session
+
     targets = [shops.get(seller_id)] if seller_id else shops.values()
 
     for shop in targets:
         try:
-            await Advertise(shop).sync_advertisers(session, PRODUCT_ID)
+            await Advertise(shop).sync_advertisers(PRODUCT_ID)
         except HTTPException:
             raise
         except Exception as e:
@@ -53,19 +52,17 @@ async def advertise_sync(
 
 @router.get("/mercado/ads/adgroups/sync", response_model=ApiResponse)
 async def adgroups_sync(
-    request: Request,
     shops=Depends(get_shops),
     seller_id: int = Query(None, description="同步指定店铺, 默认None同步所有店铺"),
 ):
     if seller_id is not None and seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
 
-    session = request.app.state.http_session
     targets = [shops.get(seller_id)] if seller_id else shops.values()
 
     for shop in targets:
         try:
-            await Advertise(shop).sync_adgroups(session)
+            await Advertise(shop).sync_adgroups()
         except HTTPException:
             raise
         except Exception as e:
@@ -81,7 +78,6 @@ async def adgroups_sync(
 
 @router.get("/mercado/ads/adgroups/details/sync", response_model=ApiResponse)
 async def adgroups_details_sync(
-    request: Request,
     shops=Depends(get_shops),
     seller_id: int = Query(None, description="同步指定店铺, 默认None同步所有店铺"),
     data_at: str = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -90,12 +86,11 @@ async def adgroups_details_sync(
     if seller_id is not None and seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
 
-    session = request.app.state.http_session
     targets = [shops.get(seller_id)] if seller_id else shops.values()
 
     for shop in targets:
         try:
-            await Advertise(shop).sync_adgroup_details(session, data_at, data_to)
+            await Advertise(shop).sync_adgroup_details(data_at, data_to)
         except HTTPException:
             raise
         except Exception as e:
@@ -112,7 +107,6 @@ async def adgroups_details_sync(
 
 @router.get("/mercado/ads/advertisers/search", response_model=ApiResponse)
 async def advertise_search(
-    request: Request,
     shops=Depends(get_shops),
     seller_id: int = Query(),
     product_id: str = Query(),
@@ -120,11 +114,10 @@ async def advertise_search(
     if seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
 
-    session = request.app.state.http_session
     shop = shops[seller_id]
 
     try:
-        resp = await Advertise(shop).get_advertisers(session, product_id)
+        resp = await Advertise(shop).get_advertisers(product_id)
     except HTTPException:
         raise
     except Exception as e:
@@ -141,7 +134,6 @@ async def advertise_search(
 
 @router.get("/mercado/ads/adgroups/search", response_model=ApiResponse)
 async def adgroups_search(
-    request: Request,
     shops=Depends(get_shops),
     seller_id: int = Query(),
     advertiser_site_id: str = Query(),
@@ -154,11 +146,10 @@ async def adgroups_search(
     if seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
 
-    session = request.app.state.http_session
     shop = shops[seller_id]
 
     try:
-        resp = await Advertise(shop).get_adgroups(session, advertiser_site_id, advertiser_id, limit, offset, data_at, data_to)
+        resp = await Advertise(shop).get_adgroups(advertiser_site_id, advertiser_id, limit, offset, data_at, data_to)
     except HTTPException:
         raise
     except Exception as e:
@@ -175,7 +166,6 @@ async def adgroups_search(
 
 @router.get("/mercado/ads/adgroup/details/search", response_model=ApiResponse)
 async def adgroups_details_search(
-    request: Request,
     shops=Depends(get_shops),
     seller_id: int = Query(),
     advertiser_site_id: str = Query(),
@@ -186,11 +176,10 @@ async def adgroups_details_search(
     if seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
 
-    session = request.app.state.http_session
     shop = shops[seller_id]
 
     try:
-        resp = await Advertise(shop).get_adgroup_details(session, advertiser_site_id, ad_group_id, data_at, data_to)
+        resp = await Advertise(shop).get_adgroup_details(advertiser_site_id, ad_group_id, data_at, data_to)
     except HTTPException:
         raise
     except Exception as e:

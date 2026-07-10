@@ -1,9 +1,6 @@
 """
 Mercado 订单资源:请求/解析/存储/同步。
 """
-
-import aiohttp
-import asyncio
 from app.db.manager import DBManager
 from datetime import datetime, timedelta
 from app.platform.MercadoShop import MercadoShop
@@ -220,10 +217,9 @@ class Order:
         pass
 
 
-    async def search_order_by_id(self, session: aiohttp.ClientSession, order_id: str):
+    async def search_order_by_id(self, order_id: str):
 
         resp = await self.shop.request(
-            session=session,
             method="GET",
             url=f"/orders/{order_id}",
             headers={
@@ -233,7 +229,7 @@ class Order:
         return resp
 
 
-    async def search_order(self, session: aiohttp.ClientSession, search: Dict):
+    async def search_order(self, search: Dict):
 
         datatype = search.get("datatype")
         at = search.get("at")
@@ -258,7 +254,6 @@ class Order:
             params[lte_key] = to
 
         resp = await self.shop.request(
-            session=session,
             method="GET",
             url="/orders",
             params=params,
@@ -269,7 +264,7 @@ class Order:
         return resp
 
 
-    async def sync_order(self, session: aiohttp.ClientSession, search: Dict):
+    async def sync_order(self, search: Dict):
 
         params_list = Order._build_params_(search)
 
@@ -283,7 +278,6 @@ class Order:
             while total is None or offset < total:
 
                 resp = await self.shop.request(
-                    session=session,
                     method="GET",
                     url="/orders",
                     params={**params, "limit": limit, "offset": offset},

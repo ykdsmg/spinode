@@ -1,5 +1,4 @@
 """Paris 订单资源: Orders 请求 / 解析 / 存储 / 同步"""
-import aiohttp
 from datetime import timedelta
 from app.db.manager import DBManager
 from app.platform.ParisShop import ParisShop
@@ -221,7 +220,7 @@ class Order:
 
     # ── 同步 ──────────────────────────────────────
 
-    async def sync(self, session: aiohttp.ClientSession, search: Dict):
+    async def sync(self, search: Dict):
 
         params_list = Order._build_params_(search)
 
@@ -233,7 +232,6 @@ class Order:
                 params.update(limit=limit, offset=offset)
 
                 resp = await self.shop.request(
-                    session=session,
                     method="GET",
                     url="/v1/orders",
                     params=params,
@@ -253,12 +251,11 @@ class Order:
                 offset += limit
 
 
-    async def search(self, session: aiohttp.ClientSession, search: Dict):
+    async def search(self, search: Dict):
 
         params = Order._build_params_(search)[0]
 
         resp = await self.shop.request(
-            session=session,
             method="GET",
             url="/v1/orders",
             params=params,
