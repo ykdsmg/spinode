@@ -1,18 +1,20 @@
 """
-Mercado 订单资源:请求/解析/存储/同步。
+Mercado order,shipment资源:请求/解析/存储/同步。
 """
+import asyncio
 from app.db.manager import DBManager
-from datetime import datetime, timedelta
+from datetime import timedelta
 from app.platform.MercadoShop import MercadoShop
 from typing import Dict, List
 from app.core.converters import _trim, _json, _str
 
 
 class Order:
-    """订单资源。"""
+    """order资源。shipment资源"""
 
     def __init__(self, shop: MercadoShop):
         self.shop = shop
+
 
     @staticmethod
     def _build_params_(search: Dict) -> List:
@@ -207,23 +209,189 @@ class Order:
                 payment_rows.append(payment_row)
 
         return {
-            "orders": order_list,
-            "items": item_rows,
-            "payments": payment_rows,
+            "order_rows": order_rows,
+            "item_rows": item_rows,
+            "payment_rows": payment_rows,
         }
 
 
+    def parse_shipmentsla(self, data: Dict) -> Dict:
+
+        if not data:
+            return {}
+
+        sla =  {
+            "sla_status":data.get("status"),
+            "sla_expected_date":_trim(data.get("expected_date")),
+            "sla_service":data.get("service"),
+            "sla_last_updated":_trim(data.get("last_updated")),
+        }
+
+        return sla
+
+
+    def parse_shipment(self, data: Dict):
+        lead_time =             data.get('lead_time') or {}
+        snapshot_packing =      data.get("snapshot_packing") or {}
+        logistic =              data.get('logistic') or {}
+        origin =                data.get("origin") or {}
+
+        shipment = {
+            "seller_id":                        self.shop.seller_id,
+            "snapshot_id":                      snapshot_packing.get("snapshot_id"),
+            "pack_hash":                        snapshot_packing.get('pack_hash'),
+            "last_updated":                     _trim(data.get('last_updated')),
+            "threshold_cancellation":           data.get('threshold_cancellation'),#new
+            "substatus":                        data.get('substatus'),
+            "date_created":                     _trim(data.get('date_created')),
+            "declared_value":                   data.get('declared_value'),
+            "mode":                             logistic.get('mode'),
+            "type":                             logistic.get('type'),
+            "direction":                        logistic.get('direction'),
+            "external_reference":               data.get('external_reference'),
+            "tracking_number":                  data.get('tracking_number'),
+            "shipping_id":                      data.get('id'),
+            "status":                           data.get('status'),
+            "tracking_method":                  data.get('tracking_method'),
+            "quotation":                        data.get('quotation'),
+            "items_types":                      data.get('items_types'),#list
+            "node_id":                          (origin.get("node") or {}).get("node_id")
+        }
+
+
+        buffering = lead_time.get("buffering") or {}
+        priority_class = lead_time.get("priority_class") or {}
+        shipping_method = lead_time.get("shipping_method") or {}
+        estimated_schedule_limit = lead_time.get("estimated_schedule_limit") or {}
+        estimated_delivery_limit = lead_time.get("estimated_delivery_limit") or {}
+        estimated_delivery_final = lead_time.get("estimated_delivery_final") or {}
+        estimated_delivery_extended = lead_time.get("estimated_delivery_extended") or {}
+        estimated_delivery_time  = lead_time.get("estimated_delivery_time") or {}
+        new_lead_time =  {
+            "seller_id":                            self.shop.seller_id,
+            "shipping_id":                          data.get('id'),
+            "buffering_date":                       _trim(buffering.get("date")),
+            "processing_time":                      _trim(lead_time.get('processing_time')),
+            "cost":                                 lead_time.get('cost'),
+            "estimated_schedule_limit":             _trim(estimated_schedule_limit.get('date')),
+            "cost_type":                            lead_time.get('cost_type'),
+            "estimated_delivery_final":             _trim(estimated_delivery_final.get('date')),
+            "list_cost":                            lead_time.get('list_cost'),
+            "estimated_delivery_limit":             _trim(estimated_delivery_limit.get('date')),
+            "priority_class_id":                    priority_class.get("id"),
+            "delivery_promise":                     lead_time.get('delivery_promise'),
+            "shipping_method_name":                 shipping_method.get('name'),
+            "shipping_method_deliver_to":           shipping_method.get('deliver_to'),
+            "shipping_method_id":                   shipping_method.get('id'),
+            "shipping_method_type":                 shipping_method.get('type'),
+            "delivery_type":                        lead_time.get('delivery_type'),
+            "service_id":                           lead_time.get('service_id'),
+            "estimated_delivery_time":              _trim(estimated_delivery_time.get('date')),
+            "pay_before":                           _trim(estimated_delivery_time.get('pay_before')),
+            "schedule":                             estimated_delivery_time.get('schedule'),
+            "unit":                                 estimated_delivery_time.get('unit'),
+            "offset_date":                          (estimated_delivery_time.get('offset') or {}).get("date"),
+            "offset_shipping":                      (estimated_delivery_time.get('offset') or {}).get("shipping"),
+            "shipping":                             estimated_delivery_time.get('shipping'),
+            "handling":                             estimated_delivery_time.get('handling'),
+            "estimated_delivery_type":              estimated_delivery_time.get('type'),
+            "time_frame_from":                      (estimated_delivery_time.get('time_frame') or {}).get("from"),
+            "time_frame_to":                        (estimated_delivery_time.get('time_frame') or {}).get("to"),
+            "option_id":                            lead_time.get('option_id'),
+            "estimated_delivery_extended":          _trim(estimated_delivery_extended.get('date')),
+            "currency_id":                          lead_time.get('currency_id'),
+        }
+
+        return shipment,new_lead_time
+
+
     async def save_order(self, data: Dict):
-        pass
+
+        if not data:
+            return {}
+
+        order_rows = data.get("order_rows") or []
+        item_rows = data.get("item_rows") or []
+        payment_rows = data.get("payment_rows") or []
+
+        await DBManager.upsert("mercado_order", order_rows, ["seller_id","order_id"])
+        placeholders = ','.join(['%s'] * len(order_rows))
+
+        rows = await DBManager.select(f"SELECT id as main_id,order_id,shipping_id FROM mercado_order WHERE order_id IN ({placeholders}) and seller_id = {self.shop.seller_id}")
+        id_map = {
+            item['order_id']:item['main_id'] for item in rows
+        }
+
+        for item in item_rows:
+            item['main_id'] = id_map.get(item['order_id'])
+        for payment in payment_rows:
+            payment['main_id'] = id_map.get(payment['order_id'])
+
+        await DBManager.upsert("mercado_order_item", item_rows, ["main_id","item_id"])
+        await DBManager.upsert("mercado_order_payment", payment_rows, ["main_id","payment_id"])
+
+        return rows
 
 
-    async def search_order_by_id(self, order_id: str):
+    async def get_order(self, ORDER_ID: str):
 
         resp = await self.shop.request(
             method="GET",
-            url=f"/orders/{order_id}",
+            url=f"/orders/{ORDER_ID}",
             headers={
                 "Content-Type": "application/json",
+            }
+        )
+        return resp
+
+
+    async def get_shipment(self, SHIPMENT_ID: str):
+
+        resp = await self.shop.request(
+            method="GET",
+            url=f"/shipments/{SHIPMENT_ID}",
+            headers={
+                "Content-Type": "application/json",
+                "X-Format-New": "true",
+            }
+        )
+        return resp
+
+
+    async def get_shipment_history(self, SHIPMENT_ID: str):
+
+        resp = await self.shop.request(
+            method="GET",
+            url=f"/shipments/{SHIPMENT_ID}/history",
+            headers={
+                "Content-Type": "application/json",
+                "X-Format-New": "true",
+            }
+        )
+        return resp
+
+
+    async def get_shipment_sla(self, SHIPMENT_ID: str):
+
+        resp = await self.shop.request(
+            method="GET",
+            url=f"/shipments/{SHIPMENT_ID}/sla",
+            headers={
+                "Content-Type": "application/json",
+                "X-Format-New": "true",
+            }
+        )
+        return resp
+
+
+    async def get_payment(self, PAYMENT_ID: str):
+
+        resp = await self.shop.request(
+            method="GET",
+            url=f"/v1/payments/{PAYMENT_ID}",
+            headers={
+                "Content-Type": "application/json",
+                "X-Format-New": "true",
             }
         )
         return resp
@@ -295,4 +463,43 @@ class Order:
                     break
 
                 parsed = self.parse_order(resp)
-                await self.save_order(parsed)
+                shipping_rows = await self.save_order(parsed)
+
+
+                if not shipping_rows:
+                    continue
+
+                task_ment = []
+                task_sla  = []
+                for item in shipping_rows:
+                    shipping_id = item['shipping_id']
+                    task_ment.append(self.get_shipment(shipping_id))
+                    task_sla.append(self.get_shipment_sla(shipping_id))
+
+                resp_ment = await asyncio.gather(*task_ment)
+                shipment_parsed_list = []
+                lead_time_parsed_list = []
+                for item, resp in zip(shipping_rows, resp_ment):
+                    if isinstance(resp, Exception):
+                        continue
+                    if isinstance(resp, Dict):
+                        shipment_parsed,lead_time_parsed = self.parse_shipment(resp)
+                        shipment_parsed.update(item)
+                        lead_time_parsed.update(item)
+                        shipment_parsed_list.append(shipment_parsed)
+                        lead_time_parsed_list.append(lead_time_parsed)
+
+                await DBManager.upsert("shipments", shipment_parsed_list, conflict_cols=["shipping_id"])
+                await DBManager.upsert("shipments", shipment_parsed_list, conflict_cols=["shipping_id"])
+
+                resp_sla = await asyncio.gather(*task_sla)
+                shipmentsla_parsed_list = []
+                for item, resp in zip(shipment_parsed_list, resp_sla):
+                    if isinstance(resp, Exception):
+                        continue
+                    if isinstance(resp, Dict):
+                        shipment_parsed = self.parse_shipmentsla(resp)
+                        shipment_parsed.update(item)
+                        shipmentsla_parsed_list.append(shipment_parsed)
+
+                await DBManager.upsert("shipmentsla", shipmentsla_parsed_list, conflict_cols=["shipping_id"])
