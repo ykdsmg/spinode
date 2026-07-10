@@ -305,6 +305,220 @@ class Order:
         return shipment,new_lead_time
 
 
+    def parse_payment(self, data: Dict):
+        """解析 /v1/payments/{id} 响应, 返回 payment 主表行 + charge 明细行列表。"""
+
+        if not data:
+            return {}, []
+
+        # ── 子对象解包 ──────────────────────────────────────
+        payer                   = data.get("payer") or {}
+        payer_identification    = payer.get("identification") or {}
+        payer_phone             = payer.get("phone") or {}
+        transaction_details     = data.get("transaction_details") or {}
+        payment_method          = data.get("payment_method") or {}
+        order_info              = data.get("order") or {}
+        fee_details             = data.get("fee_details") or []
+        point_of_interaction    = data.get("point_of_interaction") or {}
+        additional_info         = data.get("additional_info") or {}
+        amounts                 = data.get("amounts") or {}
+        metadata                = data.get("metadata") or {}
+        charges_execution_info  = data.get("charges_execution_info") or {}
+        card                    = data.get("card") or {}
+
+        # ── 支付主表行 ──────────────────────────────────────
+        payment_row = {
+            "seller_id":                    self.shop.seller_id,
+            "payment_id":                   data.get("id"),
+            "order_id":                     order_info.get("id"),
+
+            # 状态
+            "status":                       data.get("status"),
+            "status_detail":                data.get("status_detail"),
+            "money_release_status":         data.get("money_release_status"),
+            "captured":                     1 if data.get("captured") else 0,
+
+            # 时间
+            "date_created":                 _trim(data.get("date_created")),
+            "date_approved":                _trim(data.get("date_approved")),
+            "date_last_updated":            _trim(data.get("date_last_updated")),
+            "money_release_date":           _trim(data.get("money_release_date")),
+            "date_of_expiration":           _trim(data.get("date_of_expiration")),
+
+            # 金额
+            "currency_id":                  data.get("currency_id"),
+            "transaction_amount":           data.get("transaction_amount"),
+            "transaction_amount_refunded":  data.get("transaction_amount_refunded"),
+            "total_paid_amount":            transaction_details.get("total_paid_amount"),
+            "net_received_amount":          transaction_details.get("net_received_amount"),
+            "overpaid_amount":              transaction_details.get("overpaid_amount") or 0,
+            "installment_amount":           transaction_details.get("installment_amount") or 0,
+            "taxes_amount":                 data.get("taxes_amount"),
+            "coupon_amount":                data.get("coupon_amount"),
+            "shipping_amount":              data.get("shipping_amount"),
+
+            # 分期
+            "installments":                 data.get("installments"),
+
+            # 支付方式
+            "payment_method_id":            data.get("payment_method_id"),
+            "payment_type_id":              data.get("payment_type_id"),
+            "operation_type":               data.get("operation_type"),
+            "authorization_code":           data.get("authorization_code"),
+            "issuer_id":                    data.get("issuer_id"),
+
+            # 关联方
+            "collector_id":                 data.get("collector_id"),
+            "payer_id":                     payer.get("id"),
+            "payer_type":                   payer.get("type"),
+            "payer_email":                  payer.get("email"),
+            "payer_first_name":             payer.get("first_name"),
+            "payer_last_name":              payer.get("last_name"),
+
+            # 其他
+            "description":                  data.get("description"),
+            "external_reference":           data.get("external_reference"),
+            "tags":                         ",".join(data.get("tags") or []),
+            "money_release_schema":         data.get("money_release_schema"),
+            "call_for_authorize_id":        data.get("call_for_authorize_id"),
+            "card_id":                      card.get("id"),
+            "financing_group":              data.get("financing_group"),
+            "marketplace_owner":            data.get("marketplace_owner"),
+            "merchant_account_id":          data.get("merchant_account_id"),
+            "deduction_schema":             data.get("deduction_schema"),
+            "differential_pricing_id":      data.get("differential_pricing_id"),
+            "notification_url":             data.get("notification_url"),
+            "sponsor_id":                   data.get("sponsor_id"),
+            "store_id":                     data.get("store_id"),
+            "pos_id":                       data.get("pos_id"),
+            "platform_id":                  data.get("platform_id"),
+            "integrator_id":                data.get("integrator_id"),
+            "corporation_id":               data.get("corporation_id"),
+            "brand_id":                     data.get("brand_id"),
+            "statement_descriptor":         data.get("statement_descriptor"),
+            "counter_currency":             data.get("counter_currency"),
+            "build_version":                data.get("build_version"),
+            "binary_mode":                  1 if data.get("binary_mode") else 0,
+            "live_mode":                    1 if data.get("live_mode") else 0,
+            "processing_mode":              data.get("processing_mode"),
+
+            # JSON 列
+            "payer_identification":         _json(payer_identification),
+            "payer_phone":                  _json(payer_phone),
+            "payment_method":               _json(payment_method),
+            "order_info":                   _json(order_info),
+            "metadata":                     _json(metadata),
+            "transaction_details":          _json(transaction_details),
+            "fee_details":                  _json(fee_details),
+            "point_of_interaction":         _json(point_of_interaction),
+            "additional_info":              _json(additional_info),
+            "amounts_collector":            _json(amounts.get("collector")),
+            "amounts_payer":                _json(amounts.get("payer")),
+            "charges_execution_info":       _json(charges_execution_info),
+            "accounts_info":                _json(data.get("accounts_info")),
+            "release_info":                 _json(data.get("release_info")),
+        }
+
+        # ── 费用明细行 ──────────────────────────────────────
+        charge_rows = []
+        charges_details = data.get("charges_details") or []
+        for charge in charges_details:
+            charge_amounts = charge.get("amounts") or {}
+            charge_accounts = charge.get("accounts") or {}
+            charge_metadata = charge.get("metadata") or {}
+            charge_row = {
+                "seller_id":            self.shop.seller_id,
+                "payment_id":           data.get("id"),
+                "charge_id":            charge.get("id"),
+                "charge_name":          charge.get("name"),
+                "charge_type":          charge.get("type"),
+                "amount_original":      charge_amounts.get("original"),
+                "amount_refunded":      charge_amounts.get("refunded") or 0,
+                "currency_id":          charge_amounts.get("currency_id"),
+                "accounts_from":        charge_accounts.get("from"),
+                "accounts_to":          charge_accounts.get("to"),
+                "client_id":            charge.get("client_id"),
+                "reserve_id":           charge.get("reserve_id"),
+                "date_created":         _trim(charge.get("date_created")),
+                "last_updated":         _trim(charge.get("last_updated")),
+                "metadata":             _json(charge_metadata),
+                "refund_charges":       _json(charge.get("refund_charges")),
+                "counter_currencies":   _json(charge_amounts.get("counter_currencies")),
+            }
+            charge_rows.append(charge_row)
+
+        return payment_row, charge_rows
+
+
+    def parse_discount(self, data: Dict) -> List[Dict]:
+        """解析折扣明细 API 响应 (c.json 格式), 返回 (discount_rows)。"""
+
+        if not data:
+            return []
+
+        details = data.get("details") or []
+
+        discount_rows = []
+        for detail in details:
+            discount_type = detail.get("type", )
+            campaign_id = (detail.get("supplier") or {}).get("campaign_id")
+            cashback_id = (detail.get("cashback") or {}).get("id")
+
+            counter_currency_id = (detail.get("counter_currency") or {}).get("currency_id")
+            counter_currency_value = (detail.get("counter_currency") or {}).get("value")
+            items = detail.get("items") or []
+            for item in items:
+                amounts = item.get("amounts") or {}
+
+                discount_rows.append(
+                    {
+                        "seller_id":            self.shop.seller_id,
+                        "element_id":           item.get("element_id"),
+                        "quantity":             item.get("quantity"),
+                        "item_id":              item.get("id"),
+                        "total":                amounts.get("total"),
+                        "seller":               amounts.get("seller"),
+                        "discount_type":        discount_type,
+                        "campaign_id":          campaign_id,
+                        "cashback_id":          cashback_id,
+                        "counter_currency_id":  counter_currency_id,
+                        "counter_currency_value": counter_currency_value,
+                    }
+                )
+        return discount_rows
+
+
+    async def save_payment(self, payment_row: Dict, charge_rows: List[Dict]):
+        """持久化支付主表 + 费用明细表。"""
+
+        if not payment_row:
+            return
+
+        await DBManager.upsert(
+            "mercado_payment",
+            payment_row,
+            conflict_cols=["seller_id", "payment_id"],
+        )
+
+        if charge_rows:
+            await DBManager.upsert(
+                "mercado_payment_charge",
+                charge_rows,
+                conflict_cols=["seller_id", "charge_id"],
+            )
+
+
+    async def save_discount(self, discount_rows: List[Dict]):
+        """持久化折扣主表 + 商品明细表。"""
+
+        if discount_rows:
+            await DBManager.upsert(
+                "mercado_discount",
+                discount_rows,
+                conflict_cols=["seller_id", "item_id"],
+            )
+
+
     async def save_order(self, data: Dict):
 
         if not data:
@@ -331,6 +545,18 @@ class Order:
         await DBManager.upsert("mercado_order_payment", payment_rows, ["main_id","payment_id"])
 
         return rows
+
+
+    async def get_pack(self, PACK_ID: str):
+
+        resp = await self.shop.request(
+            method="GET",
+            url=f"/packs/{PACK_ID}",
+            headers={
+                "Content-Type": "application/json",
+            }
+        )
+        return resp
 
 
     async def get_order(self, ORDER_ID: str):
@@ -393,6 +619,18 @@ class Order:
             headers={
                 "Content-Type": "application/json",
                 "X-Format-New": "true",
+            }
+        )
+        return resp
+
+
+    async def get_discount(self, ORDER_ID: str):
+
+        resp = await self.shop.request(
+            method="GET",
+            url=f"/orders/{ORDER_ID}/discounts",
+            headers={
+                "Content-Type": "application/json",
             }
         )
         return resp

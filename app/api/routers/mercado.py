@@ -403,7 +403,7 @@ async def payment_get(
     shops=Depends(get_shops),
     seller_id: int = Query(),
 ):
-    """获取支付详情。"""
+    """获取支付详情 → 解析 → 存储。"""
 
     if seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
@@ -412,6 +412,8 @@ async def payment_get(
 
     try:
         resp = await Order(shop).get_payment(payment_id)
+        # payment_row, charge_rows = Order(shop).parse_payment(resp)
+        # await Order(shop).save_payment(payment_row, charge_rows)
     except HTTPException:
         raise
     except Exception as e:
@@ -423,5 +425,36 @@ async def payment_get(
     return ApiResponse(
         success=True,
         message="successfully get mercado payment",
+        data=resp,
+    )
+
+
+@router.get("/mercado/discount/{order_id}", response_model=ApiResponse)
+async def discount_get(
+    order_id: str,
+    shops=Depends(get_shops),
+    seller_id: int = Query(),
+):
+    """获取支付详情 → 解析 → 存储。"""
+
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Order(shop).get_discount(order_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"get mercado discount failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully get mercado discount",
         data=resp,
     )
