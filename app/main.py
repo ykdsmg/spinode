@@ -1,12 +1,13 @@
 """
 FastAPI 应用主文件。
 """
-import aiohttp
+
 from fastapi            import FastAPI
 from contextlib         import asynccontextmanager
 from app.config         import load_paris_shop, load_falabella_shop, load_mercado_shop
 from app.core.logging   import get_logger,setup_logging
 from app.db.pool        import pool
+from curl_cffi.requests import AsyncSession, Session, RetryStrategy
 
 from app.api.routers.falabella  import router as fl_router
 from app.api.routers.mercado    import router as ml_router
@@ -15,10 +16,12 @@ from app.api.routers.paris      import router as ps_router
 
 logger = get_logger(__name__)
 
-# 全局 aiohttp session 配置（高并发优化）
-_HTTP_SESSION_LIMIT = 200          # 全局最大并发连接数
-_HTTP_SESSION_PER_HOST = 20        # 单域名并发上限（防打爆对方 API）
-_HTTP_KEEPALIVE_TIMEOUT = 60       # 空闲连接保活秒数
+# 全局 session 配置
+_HTTP_MAX_CLIENTS   = 200            # 最大并发连接数
+_HTTP_TIMEOUT       = 60             # 默认超时（秒）
+_RETRY_COUNT        = 5              # 失败重试次数
+_RETRY_DELAY        = 1.0            # 重试初始延迟（秒）
+_RETRY_BACKOFF      = 'exponential'  # 重试退避策略
 
 
 @asynccontextmanager
@@ -31,32 +34,54 @@ async def lifespan(app: FastAPI):
     await pool.create()
     logger.info("数据库连接池已就绪")
 
-    # 全局 HTTP 连接池（所有店铺所有资源共享）
-    connector = aiohttp.TCPConnector(
-        limit=_HTTP_SESSION_LIMIT,
-        limit_per_host=_HTTP_SESSION_PER_HOST,
-        keepalive_timeout=_HTTP_KEEPALIVE_TIMEOUT,
-        enable_cleanup_closed=True,
-        ssl=False,
+    # 全局异步 HTTP Session（curl_cffi）
+    async_session = AsyncSession(
+        max_clients=_HTTP_MAX_CLIENTS,
+        timeout=_HTTP_TIMEOUT,
+        verify=False,
+        retry=RetryStrategy(
+            count=_RETRY_COUNT,
+            delay=_RETRY_DELAY,
+            jitter=0.5,
+            backoff=_RETRY_BACKOFF,
+        ),
     )
-    aiohttp_session = aiohttp.ClientSession(connector=connector)
     logger.info(
-        "全局异步 HTTP 连接池已就绪 (limit=%s, per_host=%s)",
-        _HTTP_SESSION_LIMIT, _HTTP_SESSION_PER_HOST,
+        "异步 HTTP Session 已就绪 (max_clients=%s, retry=%s, timeout=%s)",
+        _HTTP_MAX_CLIENTS, _RETRY_COUNT, _HTTP_TIMEOUT,
     )
 
+    # 全局同步 HTTP Session（curl_cffi）
+    sync_session = Session(
+        timeout=_HTTP_TIMEOUT,
+        verify=False,
+        retry=RetryStrategy(
+            count=_RETRY_COUNT,
+            delay=_RETRY_DELAY,
+            jitter=0.5,
+            backoff=_RETRY_BACKOFF,
+        ),
+    )
+    logger.info("同步 HTTP Session 已就绪 (retry=%s, timeout=%s)", _RETRY_COUNT, _HTTP_TIMEOUT)
+
+    # 注入 app.state
+    app.state.async_session = async_session
+    app.state.sync_session = sync_session
+
     # load all shops
-    app.state.paris_shops       = await load_paris_shop(aiohttp_session)
-    app.state.falabella_shops   = await load_falabella_shop()
-    app.state.mercado_shops     = await load_mercado_shop(aiohttp_session)
+    app.state.paris_shops       = await load_paris_shop(async_session)
+    app.state.falabella_shops   = await load_falabella_shop(sync_session)
+    app.state.mercado_shops     = await load_mercado_shop(async_session)
 
 
     # ── 服务运行中 ──────────────
     yield
 
     # ── shutdown ──────────────────────
-    await aiohttp_session.close()
-    logger.info("全局异步 HTTP 连接池已关闭")
+    await async_session.close()
+    logger.info("异步 HTTP Session 已关闭")
+    sync_session.close()
+    logger.info("同步 HTTP Session 已关闭")
     await pool.close()
     logger.info("spinode 已关闭")
 
@@ -72,6 +97,6 @@ app = FastAPI(
 )
 
 # ── 注册路由 ─────────────────────────────────────────
-# app.include_router(fl_router, tags=["Falabella"])
+app.include_router(fl_router, tags=["Falabella"])
 app.include_router(ml_router, tags=["Mercado"])
 app.include_router(ps_router, tags=["Paris"])

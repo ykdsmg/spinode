@@ -5,7 +5,11 @@
 
 import asyncio
 
-import aiohttp
+from curl_cffi.requests.exceptions import (
+    ConnectionError,
+    RequestException,
+    Timeout,
+)
 from tenacity import (
     retry as tenacity_retry,
     retry_if_exception_type,
@@ -20,10 +24,10 @@ RETRY_STATUS = {408, 429, 500, 502, 503, 504}
 
 # 触发重试的异常类型
 RETRY_EXCEPTIONS = (
-    aiohttp.ClientError,
+    RequestException,
+    ConnectionError,
+    Timeout,
     asyncio.TimeoutError,
-    aiohttp.ClientConnectionError,
-    aiohttp.ServerTimeoutError,
 )
 
 

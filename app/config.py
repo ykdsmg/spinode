@@ -1,8 +1,8 @@
 from app.db.manager import DBManager
-import aiohttp
+from curl_cffi.requests import AsyncSession, Session
 
 
-async def load_mercado_shop(session: aiohttp.ClientSession):
+async def load_mercado_shop(session: AsyncSession):
     from app.platform.MercadoShop import MercadoShop
 
     shops = await DBManager.select(
@@ -12,15 +12,15 @@ async def load_mercado_shop(session: aiohttp.ClientSession):
     return {shop['seller_id']: MercadoShop(**shop, http=session) for shop in shops}
 
 
-async def load_falabella_shop():
+async def load_falabella_shop(session: Session):
     from app.platform.FalabellaShop import FalabellaShop
 
     shops = await DBManager.select("SELECT SellerID as seller_id,UserID as user_id,ApiKey as api_key,BusinessUnit as business_unit,ShopName as shop_name,ShopNameS as shop_names,TimeZone as timezone FROM falabella_config")
 
-    return {shop['seller_id']: FalabellaShop(**shop) for shop in shops}
+    return {shop['seller_id']: FalabellaShop(**shop, http=session) for shop in shops}
 
 
-async def load_paris_shop(session: aiohttp.ClientSession):
+async def load_paris_shop(session: AsyncSession):
     from app.platform.ParisShop import ParisShop
 
     shops = await DBManager.select("SELECT seller_id,api_key FROM shop_config_paris")

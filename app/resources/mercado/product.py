@@ -87,7 +87,7 @@ class Product:
                 "catalog_listing":                      body.get('catalog_listing'),
             }
 
-            for variation in variations
+            for variation in variations:
                 if variation:
                     variation_row = {
                         "variation_id":         _str(variation.get('id')),
@@ -209,7 +209,7 @@ class Product:
     async def get_product(self,ids: str):
         resp = await self.shop.request(
             method="GET",
-            url=f"/items/",
+            url="/items/",
             headers={
                 "Content-Type": "application/json",
             },

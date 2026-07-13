@@ -1,8 +1,8 @@
 """Falabella 店铺（同步版）。
 
-- 同步请求，直接使用 requests，无需外部注入 session。
+- 同步请求，全局 Session 由外部（FastAPI lifespan）注入，已内置 RetryStrategy 传输层重试。
 - 每次请求 HMAC-SHA256 签名，无需 token。
-- 统一通过 request() 发送请求，自带重试逻辑。
+- 调用方无需关心重试，所有连接/超时异常由 session 层面自动处理。
 """
 
 import hashlib
@@ -10,42 +10,17 @@ import hmac
 import urllib.parse
 from datetime import datetime, timezone
 
-import requests
-from tenacity import (
-    retry as tenacity_retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
-
+from curl_cffi.requests.session import Session,HttpMethod
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-# 触发重试的请求异常
-RETRY_EXCEPTIONS = (
-    requests.exceptions.Timeout,
-    requests.exceptions.ConnectionError,
-    requests.exceptions.HTTPError,
-)
-# 触发重试的状态码
-RETRY_STATUS = {408, 429, 500, 502, 503, 504}
-
-
-class RetryableSyncError(Exception):
-    """遇到可重试状态码时抛出，触发 tenacity 重试。"""
-
-    def __init__(self, status: int, body: str = ""):
-        self.status = status
-        self.body = body
-        super().__init__(f"HTTP {status}: {body[:200]}")
 
 
 class FalabellaShop:
     """Falabella 店铺。
 
     - 签名算法: HMAC-SHA256 (Action + 公共参数排序 → 签名)。
-    - 同步请求，session 由外部（FastAPI lifespan）注入。
+    - 同步请求，全局 Session 已内置重试策略。
     """
 
     def __init__(
@@ -56,6 +31,7 @@ class FalabellaShop:
         business_unit: str,
         shop_name: str,
         shop_names: str,
+        http: Session,
         integration_type: str = "PROPIA",
         timezone: str | None = None,
     ):
@@ -65,6 +41,7 @@ class FalabellaShop:
         self.business_unit = business_unit
         self.shop_name = shop_name
         self.shop_names = shop_names
+        self.http = http
         self.integration_type = integration_type or "PROPIA"
         self.timezone = timezone
         self.base_url = "https://sellercenter-api.falabella.com/"
@@ -91,7 +68,7 @@ class FalabellaShop:
             "User-Agent": f"{self.seller_id}/Python/3.11/{self.integration_type}/{self.business_unit}"
         }
 
-    def _build_url(self, action: str, params: dict | None = None) -> str:
+    def _build_params(self, action: str, params: dict | None = None):
         """构建带签名的完整请求 URL。
 
         Args:
@@ -111,8 +88,8 @@ class FalabellaShop:
             merged.update({k: str(v) if not isinstance(v, str) else v
                            for k, v in params.items() if v is not None})
         merged["Signature"] = self._generate_signature(merged)
-        query_string = urllib.parse.urlencode(merged, doseq=True)
-        return f"{self.base_url}?{query_string}"
+
+        return merged
 
     # ═══════════════════════════════════════════════
     #  统一请求入口
@@ -120,67 +97,59 @@ class FalabellaShop:
 
     def request(
         self,
-        method: str,
+        method: HttpMethod,
         action: str,
         *,
-        max_retries: int = 5,
-        backoff_factor: float = 1.0,
         timeout: int = 30,
         params: dict | None = None,
     ) -> dict:
-        """统一 HTTP 请求入口，自带签名 + 重试。
+        """统一 HTTP 请求入口，自带签名。
+
+        传输层重试由 curl_cffi Session 内置的 RetryStrategy 承担（连接超时/DNS/SSL 等）。
+        本方法不再叠加应用层重试。
 
         工作流:
-            _build_url(action, params) → _build_headers() → tenacity 重试循环
-                └── 遇到 408/429/50x 或网络异常自动重试（指数退避）
+            _build_url(action, params) → _build_headers() → HTTP 请求 → JSON 解析
 
         Args:
-            action:         API 动作名（GetProducts / GetOrders …）。
-            max_retries:    最大重试次数（默认 5）。
-            backoff_factor: 指数退避乘数（默认 1.0）。
-            timeout:        单个 HTTP 请求超时（秒，默认 30）。
-            params:         业务参数字典，会自动合并公共参数并签名。
+            method:     HTTP 方法 (GET/POST/…)。
+            action:     API 动作名（GetProducts / GetOrders …）。
+            timeout:    单个 HTTP 请求超时（秒，默认 30）。
+            params:     业务参数字典，会自动合并公共参数并签名。
 
         Returns:
             dict — JSON 响应体，失败时返回空 dict。
         """
         # ── 1. 构建 URL + Headers ──────────────────
-        url = self._build_url(action, params)
+        params = self._build_params(action, params)
+
         headers = self._build_headers()
 
-        # ── 2. 重试 ────────────────────────────────
-        retry_decorator = tenacity_retry(
-            retry=retry_if_exception_type(
-                RETRY_EXCEPTIONS + (RetryableSyncError,)
-            ),
-            wait=wait_exponential(
-                multiplier=backoff_factor,
-                min=1,
-                max=30,
-            ),
-            stop=stop_after_attempt(max_retries),
-            reraise=True,
-        )
-
-        @retry_decorator
-        def _attempt() -> requests.Response:
-            resp = requests.request(
-                method,
-                url,
-                headers=headers,
-                timeout=timeout,
-            )
-            if resp.status_code in RETRY_STATUS:
-                raise RetryableSyncError(resp.status_code, resp.text[:500])
-            return resp
-
-        # ── 3. 执行并返回 JSON ─────────────────────
+        # ── 2. 发送请求 ────────────────────────────
         try:
-            resp = _attempt()
-            return resp.json()
+            resp = self.http.request(
+                method      = method,
+                url         = self.base_url,
+                timeout     = timeout,
+                headers     = headers,
+                params      = params,
+                verify      = False,
+            )
         except Exception as e:
             logger.error(
                 "[%s] 请求失败 %s: %s",
+                self.seller_id, action, e,
+            )
+            return {}
+
+        try:
+            if resp:
+                return resp.json()
+            else:
+                return {}
+        except Exception as e:
+            logger.error(
+                "[%s] JSON 解析失败 %s: %s",
                 self.seller_id, action, e,
             )
             return {}

@@ -1,12 +1,7 @@
 import asyncio
-import aiohttp
+from curl_cffi.requests.session import HttpMethod, AsyncSession
 from aiolimiter import AsyncLimiter
 from datetime import datetime, timedelta
-from app.http.retry import (
-    RETRY_STATUS,
-    RetryableStatusError,
-    build_retry_decorator,
-)
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -15,13 +10,14 @@ logger = get_logger(__name__)
 class ParisShop:
     """Paris 店铺。
 
-    - 全局 session 由外部传入，本类不持有任何 session。
-    - 统一通过 request() 发送请求，自带 token 刷新 + 重试 + 可选限流。
+    - 全局 AsyncSession 由外部（FastAPI lifespan）注入，已内置 RetryStrategy 传输层重试。
+    - 统一通过 request() 发送请求，自带 token 刷新 + 可选限流。
+    - 调用方无需关心重试，所有连接/超时异常由 session 层面自动处理。
     """
 
     def __init__(
         self,
-        http: aiohttp.ClientSession,
+        http: AsyncSession,
         seller_id: str,
         user_id: str | None = None,
         api_key: str | None = None,
@@ -76,15 +72,15 @@ class ParisShop:
             "Authorization": f"Bearer {self.api_key}",
         }
         try:
-            async with self.http.post(url, headers=headers, ssl=False) as resp:
-                if resp.status == 200:
-                    req = await resp.json()
-                    self.access_token = req["accessToken"]
-                    self.get_time = datetime.now()
-                    logger.info("[%s] 刷新 Token 成功", self.seller_id)
-                else:
-                    body = await resp.text()
-                    raise RuntimeError(f"刷新 Token 失败: {resp.status} {body}")
+            resp = await self.http.post(url, headers=headers, verify=False)
+            if resp.status_code == 200:
+                req = resp.json()
+                self.access_token = req["accessToken"]
+                self.get_time = datetime.now()
+                logger.info("[%s] 刷新 Token 成功", self.seller_id)
+            else:
+                body = resp.text
+                raise RuntimeError(f"刷新 Token 失败: {resp.status_code} {body}")
         except Exception as e:
             logger.error("[%s] 刷新 Token 失败: %s", self.seller_id, e)
 
@@ -92,35 +88,35 @@ class ParisShop:
     #  统一请求入口
     # ═══════════════════════════════════════════════
 
+    # curl_cffi 视为不可重试的状态码（服务端错误，session 传输层已做重试）
+
     async def request(
         self,
-        method: str,
+        method: HttpMethod,
         url: str,
         *,
         limiter: AsyncLimiter | None = None,
-        max_retries: int = 5,
-        backoff_factor: float = 1.0,
         timeout: int = 30,
         headers: dict | None = None,
+        params: dict | None = None,
         **kwargs,
     ) -> dict:
-        """统一 HTTP 请求入口，自带 token 刷新 + 重试 + 可选限流。
+        """统一 HTTP 请求入口。
+
+        传输层重试由 curl_cffi AsyncSession 内置的 RetryStrategy 承担（连接超时/DNS/SSL 等）。
+        本方法不再叠加应用层重试，仅做 token 刷新、限流控制与服务端错误记录。
 
         工作流:
-            valid_token() → 合并 headers → tenacity 重试循环
-                └── 每次 HTTP 尝试前先走 AsyncLimiter（如有）
-                └── 遇到 408/429/50x 自动重试（指数退避）
+            valid_token() → 合并 headers → AsyncLimiter（如有）→ HTTP 请求 → JSON 解析
 
         Args:
-            session:        全局 aiohttp ClientSession。
-            method:         HTTP 方法 (GET/POST/…) 。
-            url:            请求路径（自动拼接 base_url）。
-            limiter:        可选 AsyncLimiter，有 QPM 需求的 Resource 传入。
-            max_retries:    最大重试次数（默认 5）。
-            backoff_factor: 指数退避乘数（默认 1.0）。
-            timeout:        单个 HTTP 请求超时（秒，默认 30）。
-            headers:        额外请求头，与 shop 基础 headers 合并。
-            **kwargs:       透传给 aiohttp session.request()。
+            method:   HTTP 方法 (GET/POST/…)。
+            url:      请求路径（自动拼接 base_url）。
+            limiter:  可选 AsyncLimiter，有 QPM 需求的 Resource 传入。
+            timeout:  单个 HTTP 请求超时（秒，默认 30）。
+            headers:  额外请求头，与 shop 基础 headers 合并。
+            params:   URL 查询参数字典。
+            **kwargs: 透传给 curl_cffi session.request()（如 json / data 等）。
 
         Returns:
             dict — JSON 响应体，失败时返回空 dict。
@@ -139,39 +135,36 @@ class ParisShop:
         # ── 3. 拼接完整 URL ─────────────────────────
         full_url = f"{self.base_url}{url}"
 
-        # ── 4. 重试 + 可选限流 ─────────────────────
-        @build_retry_decorator(max_retries, backoff_factor)
-        async def _attempt() -> aiohttp.ClientResponse:
-            async def _send() -> aiohttp.ClientResponse:
-                return await self.http.request(
-                    method, full_url,
-                    timeout=aiohttp.ClientTimeout(total=timeout),
-                    headers=merged_headers,
-                    **kwargs,
-                )
+        # ── 4. 发送请求（带可选限流） ──────────────
+        async def _send():
+            return await self.http.request(
+                method      = method,
+                url         = full_url,
+                timeout     = timeout,
+                headers     = merged_headers,
+                params      = params,
+                verify      = False,
+                **kwargs,
+            )
 
-            # 每次 HTTP 尝试都独立走限流（防止重试绕过 QPM 限制）
+        try:
             if limiter:
                 async with limiter:
                     resp = await _send()
             else:
                 resp = await _send()
-
-            # 遇到可重试状态码 → 抛出异常触发 tenacity 重试
-            if resp.status in RETRY_STATUS:
-                body = await resp.text()
-                resp.close()
-                raise RetryableStatusError(resp.status, body)
-
-            return resp
-
-        # ── 5. 执行并返回 JSON ─────────────────────
-        try:
-            resp = await _attempt()
-            return await resp.json()
         except Exception as e:
             logger.error(
                 "[%s] 请求失败 %s %s: %s",
+                self.seller_id, method, full_url, e,
+            )
+            return {}
+
+        try:
+            return resp.json()
+        except Exception as e:
+            logger.error(
+                "[%s] JSON 解析失败 %s %s: %s",
                 self.seller_id, method, full_url, e,
             )
             return {}
