@@ -146,6 +146,91 @@ class Product:
         }
 
 
+    def parse_variations(self, data: Dict | List):
+
+        if not data:
+            return []
+
+        if isinstance(data, dict):
+            data = [data]
+        seller_id = self.shop.seller_id
+        v_rows = []
+        for item in data:
+            attribute_combinations = item.get('attribute_combinations') or []
+            attributes             = item.get('attributes') or []
+            for attribute in attributes + attribute_combinations:
+                v_row = {
+                    "seller_id":                seller_id,
+                    "main_id":                  item.get('id'),
+                    "item_id":                  item.get('item_id'),
+                    "variation_id":             str(item.get('id')),
+                    "attribute_id":             attribute.get('id'),
+                    "attribute_name":           attribute.get('name'),
+                    "value_id":                 attribute.get('value_id'),
+                    "value_name":               attribute.get('value_name'),
+                }
+                v_rows.append(v_row)
+
+        return v_rows
+
+
+    async def save_product(self, data: Dict):
+        if not data:
+            return
+
+        product_rows = data.get('product_rows') or []
+        picture_rows = data.get('picture_rows') or []
+        attribute_rows = data.get('attribute_rows') or []
+
+        await DBManager.upsert("mercado_product", product_rows, ["seller_id","item_id","variation_id"])
+
+        id_map = {
+            (item['item_id'],item['variation_id']): item['id']
+            for item in await DBManager.select("SELECT id,item_id,variation_id FROM mercado_product WHERE seller_id = %s", [self.shop.seller_id])
+        }
+
+        for item in picture_rows:
+            item["main_id"] = id_map.get((item['item_id'], item['variation_id']))
+        for item in attribute_rows:
+            item["main_id"] = id_map.get((item['item_id'], item['variation_id']))
+
+        await DBManager.upsert("mercado_product_image", picture_rows, ["main_id","image_id"])
+        await DBManager.upsert("mercado_product_attribute", attribute_rows, ["main_id","attribute_id"])
+
+
+    async def save_variation(self, data: List):
+        if not data:
+            return
+        if not isinstance(data, list):
+            data = [data]
+        await DBManager.upsert("mercado_product_variation", data, ["main_id","variation_id"])
+
+
+    async def get_product(self,ids: str):
+        resp = await self.shop.request(
+            method="GET",
+            url=f"/items/",
+            headers={
+                "Content-Type": "application/json",
+            },
+            params={
+                "ids": ids,
+            }
+        )
+        return resp
+
+
+    async def get_variation(self, ITEM_ID: str, VARIATION_ID: str):
+        resp = await self.shop.request(
+            method="GET",
+            url=f"/items/{ITEM_ID}/variations/{VARIATION_ID}",
+            headers={
+                "Content-Type": "application/json",
+            }
+        )
+        return resp
+
+
     async def iteam_search(self,  limit: int = 100, offset: int = 0):
 
         seller_id = self.shop.seller_id
@@ -165,30 +250,68 @@ class Product:
         return resp
 
 
-    async def item(self,ids: str):
+    async def sync_product(self):
+
+        limit = 100
+        offset = 0
+        total = None
+
+        ids = []
+
+        while total is None or offset < total:
+            resp = await self.iteam_search(limit=limit, offset=offset)
+
+            if total is None:
+                total = resp.get('paging',{}).get('total', None)
+                if total is None:
+                    break
+            ids.extend(resp.get('results') or [])
+            offset += limit
+
+        ids_list = [ids[i:i+20] for i in range(0, len(ids), 20)]
+
+        tasks = []
+        for item in ids_list:
+            item_str = _lstr(item)
+            if item_str:
+                tasks.append(self.get_product(item_str))
+        await asyncio.gather(*tasks)
+
+        products = []
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    continue
+                if isinstance(result, Dict):
+                    products.extend(result)
+        parsed = self.parse_product(products)
+        await self.save_product(parsed)
 
 
-        resp = await self.shop.request(
-            method="GET",
-            url="/items/",
-            headers={
-                "Content-Type": "application/json",
-            },
-            params={"ids": ids}
-        )
+    async def sync_variation(self):
 
-        return resp
+        seller_id = self.shop.seller_id
 
+        v_ids = await DBManager.select("SELECT id,item_id,variation_id FROM mercado_product WHERE seller_id = % AND variation_id <> ''", [seller_id])
 
-    async def variation(self,ITEM_ID: str,VARIATION_ID: str):
+        tasks = []
+        for v_id in v_ids:
+            tasks.append(self.get_variation(v_id['item_id'], v_id['variation_id']))
+        await asyncio.gather(*tasks)
 
+        variations = []
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for v_id, result in zip(v_ids, results):
+                if isinstance(result, Exception):
+                    continue
+                if isinstance(result, Dict):
+                    result.update({
+                        'main_id': v_id['id'],
+                        'item_id': v_id['item_id'],
+                    })
+                    variations.append(result)
 
-        resp = await self.shop.request(
-            method="GET",
-            url=f"/items/{ITEM_ID}/variations/{VARIATION_ID}",
-            headers={
-                "Content-Type": "application/json",
-            }
-        )
-
-        return resp
+        parsed = self.parse_variations(variations)
+        await self.save_variation(parsed)
