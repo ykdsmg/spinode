@@ -1,16 +1,13 @@
 """Falabella 店铺（同步版）。
 
-- 同步请求，全局 Session 由外部（FastAPI lifespan）注入，已内置 RetryStrategy 传输层重试。
+- 同步请求，全局 Session 由外部（FastAPI lifespan）注入，无重试。
 - 每次请求 HMAC-SHA256 签名，无需 token。
-- 调用方无需关心重试，所有连接/超时异常由 session 层面自动处理。
 """
 import requests
 import hashlib
 import hmac
 import urllib.parse
 from datetime import datetime, timezone
-
-from curl_cffi.requests.session import Session,HttpMethod
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -20,7 +17,6 @@ class FalabellaShop:
     """Falabella 店铺。
 
     - 签名算法: HMAC-SHA256 (Action + 公共参数排序 → 签名)。
-    - 同步请求，全局 Session 已内置重试策略。
     """
 
     def __init__(
@@ -101,9 +97,6 @@ class FalabellaShop:
         params: dict | None = None,
     ) -> dict:
         """统一 HTTP 请求入口，自带签名。
-
-        传输层重试由 curl_cffi Session 内置的 RetryStrategy 承担（连接超时/DNS/SSL 等）。
-        本方法不再叠加应用层重试。
 
         工作流:
             _build_url(action, params) → _build_headers() → HTTP 请求 → JSON 解析

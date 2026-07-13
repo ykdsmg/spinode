@@ -2,6 +2,7 @@
 import json
 from app.db.manager import DBManager
 from app.platform.FalabellaShop import FalabellaShop
+from datetime import timedelta
 from typing import Dict
 from app.core.converters import _sdec
 
@@ -11,7 +12,7 @@ class Order:
     def __init__(self, shop: FalabellaShop):
         self.shop = shop
 
-    def parse_item(self, resp: dict):
+    def parse_item(self, resp: Dict):
 
         if not resp:
             return []
@@ -167,11 +168,50 @@ class Order:
                 "extraattributes_rows": extraattributes_list,
             }
 
-    async def get_orders(self, search: dict):
+    def _build_search(self, search: Dict):
+
+        datatype = search.get("datatype")
+        at = search.get("at")
+        to = search.get("to")
+
+        params = {k: v for k, v in search.items() if k not in ("at", "to", "datatype")}
+
+        if datatype is not None:
+
+            params_list = []
+
+            date_fields = {
+                0: ("UpdatedAfter", "UpdatedBefore"),
+                1: ("CreatedAfter", "CreatedBefore"),
+            }
+
+            if datatype not in date_fields:
+                raise ValueError(f"不支持的 datatype: {datatype}")
+
+            gte_key, lte_key = date_fields[datatype]
+
+            if at and to:
+                current_at = at
+                while current_at < to:
+                    current_to = current_at + timedelta(days=1)
+                    if current_to > to:
+                        current_to = to
+                    params[gte_key] = current_at.strftime("%Y-%m-%d")
+                    params[lte_key] = current_to.strftime("%Y-%m-%d")
+                    params_list.append(params.copy())
+                    current_at += timedelta(days=1)
+
+                return params_list
+            else:
+                raise ValueError("at 和 to 必须同时提供")
+        else:
+            return [params]
+
+    async def get_orders(self, search: Dict):
 
         resp = self.shop.request(
             method="GET",
-            action="GetOrder",
+            action="GetOrders",
             params=search,
         )
         return resp
@@ -198,12 +238,12 @@ class Order:
 
         resp = self.shop.request(
             method="GET",
-            action="GetOrderItem",
+            action="GetOrderItems",
             params={"OrderId": order_id},
         )
         return resp
 
-    async def save_order(self, data: dict):
+    async def save_order(self, data: Dict):
         if not data:
             return
 
@@ -253,31 +293,34 @@ class Order:
 
         return id_map
 
-    async def save_item(self, data: dict):
+    async def save_item(self, data: Dict):
         await DBManager.upsert("falabella_order_items", data, ["OrdersId", "OrderItemId"])
 
-    async def sync_order(self, search: dict):
+    async def sync_order(self, search: Dict):
         """全量同步商品 (自动翻页)。返回同步总数。"""
-        limit = 1000
-        offset = 0
-        total = None
 
-        while total is None or (total < offset):
-            search.update({"Limit": limit, "Offset": offset})
+        for params in self._build_search(search):
 
-            resp = await self.get_orders(search)
-            if total is None:
-                total = int((resp.get("Head") or {}).get("TotalCount", 0)) or 0
-                if total == 0:
-                    break
-            if resp:
-                offset      += limit
-                resp         = self.parse_order(resp)
-                id_map       = await self.save_order(resp) or {}
-                orderids     = [item for item in id_map.keys()]
-                item_resp    = await self.get_items(f"[{','.join(str(item) for item in orderids)}]")
-                if item_resp:
-                    item_resp = self.parse_item(item_resp)
-                    for i in item_resp:
-                        i["RBOrderId"] = id_map.get(i.get("OrderId"))
-                    await DBManager.upsert("falabella_order_items", item_resp, ["OrdersId", "OrderItemId"])
+            limit = 100
+            offset = 0
+            total = None
+
+            while total is None or offset < total:
+                search.update({"Limit": limit, "Offset": offset})
+
+                resp = await self.get_orders(search)
+                if total is None:
+                    total = int((resp.get("Head") or {}).get("TotalCount", 0)) or 0
+                    if total == 0:
+                        break
+                if resp:
+                    offset      += limit
+                    resp         = self.parse_order(resp)
+                    id_map       = await self.save_order(resp) or {}
+                    orderids     = [item for item in id_map.keys()]
+                    item_resp    = await self.get_items(f"[{','.join(str(item) for item in orderids)}]")
+                    if item_resp:
+                        item_resp = self.parse_item(item_resp)
+                        for i in item_resp:
+                            i["RBOrderId"] = id_map.get(i.get("OrderId"))
+                        await DBManager.upsert("falabella_order_items", item_resp, ["OrdersId", "OrderItemId"])
