@@ -1,28 +1,24 @@
 """Falabella 商品资源: GetProducts 请求 / 解析 / 存储 / 同步"""
 
-from app.api.schemas import FLProductSearch
-
 from app.db.manager import DBManager
-from app.http.client import HttpClient
 from app.platform.FalabellaShop import FalabellaShop
-
+from typing import Dict
 
 class Product:
     """商品资源。"""
 
-    def __init__(self, shop: FalabellaShop, client: HttpClient):
+    def __init__(self, shop: FalabellaShop):
         self.shop = shop
-        self.client = client or HttpClient(async_mode=False)
 
-    def parse(self, resp: dict | None):
+    def parse(self, resp: Dict):
         """解析商品响应。"""
         if not resp:
-            return None
+            return {}
 
         data = ((resp.get("Body") or {}).get("Products") or {}).get("Product")
 
         if not data:
-            return None
+            return {}
         else:
             pro_info_list = []
             ima_info_list = []
@@ -105,7 +101,7 @@ class Product:
                 "abt_info": abt_info_list,
             }
 
-    async def save(self, resp: dict):
+    async def save(self, resp: Dict):
         if not resp:
             return
 
@@ -159,39 +155,25 @@ class Product:
             "falabella_product_attribute", abt_info, ["RBProductId", "AttributeName"]
         )
 
-    async def fetch(self, search: FLProductSearch):
-        params = {k: v for k, v in search.model_dump().items() if v is not None}
+    def get_product(self, search: Dict):
 
-        url = self.shop._build_url("GetProducts", params)
-        headers = self.shop._build_headers()
-        try:
-            resp = await self.client.request_sync(
-                method="GET", url=url, headers=headers
-            )
-            return resp.json()
-        except Exception as e:
-            return None
+        resp = self.shop.request(
+            method="GET",
+            action="GetProducts",
+            params=search,
+        )
+        return resp
 
-    async def sync_products(self, search: FLProductSearch):
+    async def sync_products(self, search: Dict):
         """全量同步商品 (自动翻页)。返回同步总数。"""
         limit = 1000
         offset = 0
-        count = 0
-        first = True
+        count = None
+        while count is None or offset < count:
+            search.update({"Limit": limit, "Offset": offset})
 
-        while first or (limit - count == 0):
-            search.Limit = limit
-            search.Offset = offset
-
-            if first:
-                first = False
-
-            resp = await self.fetch(search)
+            resp = self.get_product(search)
             if not resp:
                 continue
             else:
-                resp = self.parse(resp)
-
-                if resp:
-                    count += len(resp.get("pro_info") or [])
-                    await self.save(resp)
+                await self.save(self.parse(resp))

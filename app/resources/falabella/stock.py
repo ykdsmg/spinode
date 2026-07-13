@@ -1,25 +1,21 @@
 """Falabella 库存资源: GetStock 请求 / 解析 / 存储 / 同步。"""
 
 from datetime import datetime
-
-from api.schemas import FLStockSearch
-
 from app.db.manager import DBManager
-from app.http.client import HttpClient
 from app.platform.FalabellaShop import FalabellaShop
+from typing import Dict
 
 
 class Stock:
     """商品资源。"""
 
-    def __init__(self, shop: FalabellaShop, client: HttpClient):
+    def __init__(self, shop: FalabellaShop):
         self.shop = shop
-        self.client = client or HttpClient(async_mode=False)
 
-    def parse(self, resp: dict | None):
+    def parse(self, resp: dict):
         """解析商品响应。"""
         if not resp:
-            return None
+            return {}
 
         data = (resp.get("Body") or {}).get("Stocks") or {}
 
@@ -48,56 +44,42 @@ class Stock:
             "FulfillmentWarehouses": FulfillmentWarehouses,
         }
 
+    def get_stock(self, search: Dict):
+
+        resp = self.shop.request(
+            method="GET",
+            action="GetStock",
+            params=search,
+        )
+
+        return resp
+
     async def save(self, data: dict):
         if not data:
             return
 
         SellerWarehouses = data.get("SellerWarehouses") or []
         FulfillmentWarehouses = data.get("FulfillmentWarehouses") or []
-        await DBManager.upsert(
-            "falabella_stock_sellerwarehouses", SellerWarehouses, ["SellerId", "Sku"]
-        )
-        await DBManager.upsert(
-            "falabella_stock_fulfillmentwarehouses",
-            FulfillmentWarehouses,
-            ["SellerId", "Sku"],
-        )
+        await DBManager.upsert("falabella_stock_sellerwarehouses", SellerWarehouses, ["SellerId", "Sku"])
+        await DBManager.upsert("falabella_stock_fulfillmentwarehouses", FulfillmentWarehouses, ["SellerId", "Sku"])
 
-    async def fetch(self, search: FLStockSearch):
-        params = {k: v for k, v in search.model_dump().items() if v is not None}
-
-        url = self.shop._build_url("GetStock", params)
-        headers = self.shop._build_headers()
-        try:
-            resp = await self.client.request_sync(
-                method="GET", url=url, headers=headers
-            )
-            return resp.json()
-        except Exception as e:
-            return None
-
-    async def sync_stock(self, search: FLStockSearch):
+    async def sync_stock(self, search: Dict):
         """全量同步商品 (自动翻页)。返回同步总数。"""
         limit = 1000
         offset = 0
-        count = 0
-        first = True
+        count = None
 
-        while first or (limit - count == 0):
-            search.Limit = limit
-            search.Offset = offset
+        while count is None or False:
 
-            if first:
-                first = False
+            search.update({"Limit": limit, "Offset": offset})
 
-            resp = await self.fetch(search)
+            resp = self.get_stock(search)
+
             if not resp:
                 continue
             else:
+                count = 0
                 resp = self.parse(resp)
-
                 if resp:
-                    count += len(resp.get("SellerWarehouses") or []) + len(
-                        resp.get("FulfillmentWarehouses") or []
-                    )
                     await self.save(resp)
+            offset += limit

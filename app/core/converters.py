@@ -18,3 +18,7 @@ def _str(s):
 def _lstr(s):
     """将List对象转换为字符串。"""
     return ','.join(str(item) for item in s) if s else None
+
+def _sdec(s):
+    """str decimal"""
+    return str(s).replace(",", "") if s else "0.00"

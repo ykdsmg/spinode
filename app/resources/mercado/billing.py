@@ -1,12 +1,9 @@
 """
 Mercado billing资源:请求/解析/存储/同步。
 """
-import asyncio
 from app.db.manager import DBManager
-from datetime import timedelta
 from app.platform.MercadoShop import MercadoShop
-from typing import Dict, List
-from app.core.converters import _trim, _json, _str
+from typing import  List
 
 
 class Billing:
@@ -249,7 +246,7 @@ class Billing:
         return billing_rows
 
 
-    async def Periods(self,group: str|None = None,document_type: str|None = None,offset: int = 0,limit: int = 12):
+    async def Periods(self,group: str,document_type: str,offset: int = 0,limit: int = 12):
 
         resp = await self.shop.request(
             method="GET",
@@ -262,7 +259,7 @@ class Billing:
         return resp
 
 
-    async def Billing(self, key: str|None = None, group: str|None = None, document_type: str|None = None, limit: int|None = 1000, from_id: int|None = 0):
+    async def Billing(self, key: str, group: str, document_type: str, limit: int = 1000, from_id: int = 0):
 
         if group == "ML":
             url = f"/billing/integration/periods/key/{key}/group/ML/details?document_type={document_type}&limit={limit}&from_id={from_id}&sort_by=DATE&order_by=ASC"
@@ -286,5 +283,69 @@ class Billing:
         return resp
 
 
-    async def sync_billing(self, ):
-        pass
+    async def sync_periods(self):
+
+        resp = await self.Periods(
+            group="ML",
+            document_type="BILL",
+        )
+
+        await DBManager.upsert("billing_period", resp, ["seller_id","period_key","group_id"])
+
+
+    async def sync_bills(self, key: str):
+
+        for group in ["ML", "MP", "FLEX", "FULL"]:
+
+            from_id = 0
+            count = 0
+            limit = 1000
+            total = None
+            err_count = 30
+
+            while total is None or count < total:
+                if err_count <= 0:
+                    break
+
+                resp = await self.Billing(
+                    key=key,
+                    group=group,
+                    document_type="BILL",
+                    limit=limit,
+                    from_id=from_id,
+                )
+                if not resp:
+                    err_count -= 1
+                    continue
+
+                if total is None:
+                    total = resp.get("total", 0)
+                    if total == 0:
+                        break
+
+                results = resp.get("results", [])
+                curr_len = len(results)
+
+                if total - count > limit:
+                    if curr_len != limit:
+                        err_count -=1
+                        continue
+                if total - count < limit:
+                    if curr_len < total - count:
+                        err_count -=1
+                        continue
+                # count += curr_len
+                from_id = resp.get('last_id') or 0
+
+                if group == "ML":
+                    req_list =   self.parse_ml_billing(results,key = key)
+                    await DBManager.insert("mercado_billing_ml", req_list)
+                if group == "MP":
+                    req_list =   self.parse_mp_billing(results,key = key)
+                    await DBManager.insert("mercado_billing_mp", req_list)
+                if group == "FLEX":
+                    req_list = self.parse_flex_billing(results,key = key)
+                    await DBManager.insert("mercado_billing_flex", req_list)
+                if group == "FULL":
+                    req_list = self.parse_full_billing(results,key = key)
+                    await DBManager.insert("mercado_billing_full", req_list)
