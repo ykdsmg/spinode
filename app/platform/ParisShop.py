@@ -153,6 +153,7 @@ class ParisShop:
                     resp = await _send()
             else:
                 resp = await _send()
+            resp.raise_for_status()
         except Exception as e:
             logger.error(
                 "[%s] 请求失败 %s %s: %s",

@@ -4,7 +4,7 @@
 - 每次请求 HMAC-SHA256 签名，无需 token。
 - 调用方无需关心重试，所有连接/超时异常由 session 层面自动处理。
 """
-
+import requests
 import hashlib
 import hmac
 import urllib.parse
@@ -31,7 +31,7 @@ class FalabellaShop:
         business_unit: str,
         shop_name: str,
         shop_names: str,
-        http: Session,
+        http: requests.Session,
         integration_type: str = "PROPIA",
         timezone: str | None = None,
     ):
@@ -50,9 +50,9 @@ class FalabellaShop:
     #  签名
     # ═══════════════════════════════════════════════
 
-    def _generate_signature(self, parameters: dict[str, str]) -> str:
+    def _generate_signature(self, params: dict[str, str]) -> str:
         """HMAC-SHA256 签名。参数按 key 排序 → key=value& 拼接 → HMAC 摘要。"""
-        concatenated = urllib.parse.urlencode(sorted(parameters.items()))
+        concatenated = urllib.parse.urlencode(sorted(params.items()))
         return hmac.new(
             key=self.api_key.encode("utf-8"),
             msg=concatenated.encode("utf-8"),
@@ -76,17 +76,14 @@ class FalabellaShop:
             params: 业务参数，会自动合并公共参数并签名。
         """
         merged = {
-            "Action": action,
-            "Format": "JSON",
-            "Timestamp": datetime.now(timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%S+00:00"
-            ),
-            "UserID": self.user_id,
-            "Version": "1.0",
+            "Action":       action,
+            "Format":       "JSON",
+            "Timestamp":    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00"),
+            "UserID":       self.user_id,
+            "Version":      "1.0",
         }
         if params:
-            merged.update({k: str(v) if not isinstance(v, str) else v
-                           for k, v in params.items() if v is not None})
+            merged.update(params)
         merged["Signature"] = self._generate_signature(merged)
 
         return merged
@@ -97,7 +94,7 @@ class FalabellaShop:
 
     def request(
         self,
-        method: HttpMethod,
+        method: str,
         action: str,
         *,
         timeout: int = 30,
@@ -133,8 +130,12 @@ class FalabellaShop:
                 timeout     = timeout,
                 headers     = headers,
                 params      = params,
-                verify      = False,
+                # verify      = False,
             )
+            if resp:
+                resp.raise_for_status()
+            else:
+                raise ValueError("响应为空")
         except Exception as e:
             logger.error(
                 "[%s] 请求失败 %s: %s",
@@ -143,10 +144,7 @@ class FalabellaShop:
             return {}
 
         try:
-            if resp:
-                return resp.json()
-            else:
-                return {}
+            return resp.json()
         except Exception as e:
             logger.error(
                 "[%s] JSON 解析失败 %s: %s",

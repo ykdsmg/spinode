@@ -1,4 +1,4 @@
-"""Falabella 商品资源: GetOrders 请求 / 解析 / 存储 / 同步"""
+"""Falabella 订单资源: 请求 / 解析 / 存储 / 同步"""
 import json
 from app.db.manager import DBManager
 from app.platform.FalabellaShop import FalabellaShop
@@ -6,7 +6,7 @@ from typing import Dict
 from app.core.converters import _sdec
 
 class Order:
-    """商品资源。"""
+    """订单资源"""
 
     def __init__(self, shop: FalabellaShop):
         self.shop = shop
@@ -167,7 +167,7 @@ class Order:
                 "extraattributes_rows": extraattributes_list,
             }
 
-    def get_orders(self, search: dict):
+    async def get_orders(self, search: dict):
 
         resp = self.shop.request(
             method="GET",
@@ -176,7 +176,7 @@ class Order:
         )
         return resp
 
-    def get_order(self, order_id: str):
+    async def get_order(self, order_id: str):
 
         resp = self.shop.request(
             method="GET",
@@ -185,7 +185,7 @@ class Order:
         )
         return resp
 
-    def get_items(self, order_ids: str):
+    async def get_items(self, order_ids: str):
 
         resp = self.shop.request(
             method="GET",
@@ -194,7 +194,7 @@ class Order:
         )
         return resp
 
-    def get_item(self, order_id: str):
+    async def get_item(self, order_id: str):
 
         resp = self.shop.request(
             method="GET",
@@ -265,7 +265,7 @@ class Order:
         while total is None or (total < offset):
             search.update({"Limit": limit, "Offset": offset})
 
-            resp = self.get_orders(search)
+            resp = await self.get_orders(search)
             if total is None:
                 total = int((resp.get("Head") or {}).get("TotalCount", 0)) or 0
                 if total == 0:
@@ -275,9 +275,9 @@ class Order:
                 resp         = self.parse_order(resp)
                 id_map       = await self.save_order(resp) or {}
                 orderids     = [item for item in id_map.keys()]
-                item_resp    = self.get_items(f"[{','.join(str(item) for item in orderids)}]")
+                item_resp    = await self.get_items(f"[{','.join(str(item) for item in orderids)}]")
                 if item_resp:
-                    item_resp = self.parse_item(resp)
+                    item_resp = self.parse_item(item_resp)
                     for i in item_resp:
                         i["RBOrderId"] = id_map.get(i.get("OrderId"))
                     await DBManager.upsert("falabella_order_items", item_resp, ["OrdersId", "OrderItemId"])

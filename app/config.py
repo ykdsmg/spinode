@@ -1,5 +1,6 @@
 from app.db.manager import DBManager
-from curl_cffi.requests import AsyncSession, Session
+from curl_cffi.requests import AsyncSession
+import requests
 
 
 async def load_mercado_shop(session: AsyncSession):
@@ -12,7 +13,7 @@ async def load_mercado_shop(session: AsyncSession):
     return {shop['seller_id']: MercadoShop(**shop, http=session) for shop in shops}
 
 
-async def load_falabella_shop(session: Session):
+async def load_falabella_shop(session: requests.Session):
     from app.platform.FalabellaShop import FalabellaShop
 
     shops = await DBManager.select("SELECT SellerID as seller_id,UserID as user_id,ApiKey as api_key,BusinessUnit as business_unit,ShopName as shop_name,ShopNameS as shop_names,TimeZone as timezone FROM falabella_config")

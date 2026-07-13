@@ -83,7 +83,7 @@ class MercadoShop:
         async with self._token_lock:
             if not self._should_refresh:          # double-check
                 return
-            await self._refresh_token()
+            # await self._refresh_token()
 
     async def _refresh_token(self):
         """使用全局 curl_cffi session 异步刷新 OAuth Token 并写 DB。"""
@@ -145,7 +145,7 @@ class MercadoShop:
         url: str,
         *,
         limiter: AsyncLimiter | None = None,
-        timeout: int = 60,
+        timeout: int = 50,
         other_url: str | None = None,
         headers: dict | None = None,
         params:  dict | None = None,
@@ -204,6 +204,7 @@ class MercadoShop:
                     resp = await _send()
             else:
                 resp = await _send()
+            resp.raise_for_status()
         except Exception as e:
             logger.error(
                 "[%s] 请求失败 %s %s: %s",

@@ -13,7 +13,7 @@ from app.api.routers.falabella  import router as fl_router
 from app.api.routers.mercado    import router as ml_router
 from app.api.routers.paris      import router as ps_router
 
-
+import requests
 logger = get_logger(__name__)
 
 # 全局 session 配置
@@ -30,39 +30,26 @@ async def lifespan(app: FastAPI):
 
     # ── startup ───────────────────────
     setup_logging()
-    logger.info("fmshop v2.0 (FastAPI) 启动中...")
+    logger.info("spinode v2.0 (FastAPI) 启动中...")
     await pool.create()
     logger.info("数据库连接池已就绪")
 
     # 全局异步 HTTP Session（curl_cffi）
     async_session = AsyncSession(
-        max_clients=_HTTP_MAX_CLIENTS,
-        timeout=_HTTP_TIMEOUT,
-        verify=False,
-        retry=RetryStrategy(
-            count=_RETRY_COUNT,
-            delay=_RETRY_DELAY,
-            jitter=0.5,
-            backoff=_RETRY_BACKOFF,
+        max_clients = _HTTP_MAX_CLIENTS,
+        timeout     = _HTTP_TIMEOUT,
+        retry       = RetryStrategy(
+            count   = _RETRY_COUNT,
+            delay   = _RETRY_DELAY,
+            jitter  = 0.5,
+            backoff = _RETRY_BACKOFF,
         ),
     )
-    logger.info(
-        "异步 HTTP Session 已就绪 (max_clients=%s, retry=%s, timeout=%s)",
-        _HTTP_MAX_CLIENTS, _RETRY_COUNT, _HTTP_TIMEOUT,
-    )
+    logger.info("异步 HTTP Session 已就绪 (max_clients=%s, retry=%s, timeout=%s)", _HTTP_MAX_CLIENTS, _RETRY_COUNT, _HTTP_TIMEOUT)
 
     # 全局同步 HTTP Session（curl_cffi）
-    sync_session = Session(
-        timeout=_HTTP_TIMEOUT,
-        verify=False,
-        retry=RetryStrategy(
-            count=_RETRY_COUNT,
-            delay=_RETRY_DELAY,
-            jitter=0.5,
-            backoff=_RETRY_BACKOFF,
-        ),
-    )
-    logger.info("同步 HTTP Session 已就绪 (retry=%s, timeout=%s)", _RETRY_COUNT, _HTTP_TIMEOUT)
+    sync_session = requests.Session()
+    logger.info("同步 HTTP Session 已就绪 (timeout=%s)", _HTTP_TIMEOUT)
 
     # 注入 app.state
     app.state.async_session = async_session
