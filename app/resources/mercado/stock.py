@@ -72,5 +72,21 @@ class Stock:
         return resp
 
 
-    async def sync_stock(self,):
-        pass
+    async def sync_stock(self):
+
+        seller_id = self.shop.seller_id
+        user_product_ids = await DBManager.select("SELECT DISTINCT user_product_id FROM mercado_product WHERE seller_id = %s AND user_product_id IS NOT NULL", [seller_id])
+
+        tasks = []
+        for item in user_product_ids:
+            user_product_id = item['user_product_id']
+            tasks.append(self.get_stock(user_product_id))
+
+        if tasks:
+            stock_rows = []
+            resps = await asyncio.gather(*tasks)
+            for resp in resps:
+                if isinstance(resp, Exception):
+                    continue
+                stock_rows.extend(self.parsed_stock(resp))
+            await DBManager.upsert("mercado_product_stock", stock_rows, ["seller_id","user_product_id"])
