@@ -12,11 +12,13 @@ Falabella 路由:
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
 
 # basemodel
-from app.api.schemas import ApiResponse, FLOrderSearch
+from app.api.schemas import ApiResponse, FLOrderSearch,FLProductSearch, FLStockSearch
 
 
 # 资源
 from app.resources.falabella.order import Order
+from app.resources.falabella.product import Product
+from app.resources.falabella.stock import Stock
 
 
 router = APIRouter()
@@ -27,7 +29,7 @@ def get_shops(request: Request):
 # ═════════════════════════════════════════════════════════
 #  Order
 # ═════════════════════════════════════════════════════════
-@router.get("/falabella/order/sync", response_model=ApiResponse)
+@router.get("/falabella/orders/sync", response_model=ApiResponse)
 async def order_sync(
     shops = Depends(get_shops),
     searchmodel: FLOrderSearch = Depends(),
@@ -168,5 +170,129 @@ async def orderitems_search(
     return ApiResponse(
         success=True,
         message="successfully get falabella order - items",
+        data=resp,
+    )
+
+# ═════════════════════════════════════════════════════════
+#  Product
+# ═════════════════════════════════════════════════════════
+@router.get("/falabella/products/search", response_model=ApiResponse)
+async def product_search(
+    searchmodel: FLProductSearch = Depends(),
+    shops=Depends(get_shops),
+    seller_id: str = Query(),
+):
+    """获取单个订单详情。"""
+    search = searchmodel.model_dump(exclude_none=True)
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Product(shop).get_products(search)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"get falabella product failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully get falabella product",
+        data=resp,
+    )
+
+
+@router.get("/falabella/products/sync", response_model=ApiResponse)
+async def product_sync(
+    searchmodel: FLProductSearch = Depends(),
+    shops=Depends(get_shops),
+    seller_id: str = Query(),
+):
+    """获取单个订单详情。"""
+    search = searchmodel.model_dump(exclude_none=True)
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Product(shop).sync_products(search)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"sync falabella products failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully sync falabella products",
+        data=resp,
+    )
+
+
+# ═════════════════════════════════════════════════════════
+#  Stock
+# ═════════════════════════════════════════════════════════
+@router.get("/falabella/stocks/search", response_model=ApiResponse)
+async def stocks_search(
+    searchmodel: FLStockSearch = Depends(),
+    shops=Depends(get_shops),
+    seller_id: str = Query(),
+):
+    """获取单个订单详情。"""
+    search = searchmodel.model_dump(exclude_none=True)
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Stock(shop).get_stocks(search)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"get falabella product stock failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully get falabella product stock",
+        data=resp,
+    )
+
+@router.get("/falabella/stocks/sync", response_model=ApiResponse)
+async def stocks_sync(
+    searchmodel: FLStockSearch = Depends(),
+    shops=Depends(get_shops),
+    seller_id: str = Query(),
+):
+    """获取单个订单详情。"""
+    search = searchmodel.model_dump(exclude_none=True)
+    if seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
+
+    shop = shops[seller_id]
+
+    try:
+        resp = await Stock(shop).sync_stocks(search)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"sync falabella product stock failed for shop {seller_id}: {e}",
+        )
+
+    return ApiResponse(
+        success=True,
+        message="successfully sync falabella product stock",
         data=resp,
     )

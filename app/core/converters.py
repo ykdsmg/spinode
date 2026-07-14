@@ -9,16 +9,20 @@ def _trim(s):
 
 def _json(s):
     """将对象转换为 JSON 字符串。"""
-    return json.dumps(s, ensure_ascii=False) if s else None
+    return json.dumps(s) if s else None
 
 def _str(s):
     """将对象转换为字符串。"""
     return str(s) if s else None
 
 def _lstr(s):
-    """将List对象转换为字符串。"""
+    """将List对象转换为字符串。List为空返回None"""
     return ','.join(str(item) for item in s) if s else None
 
-def _sdec(s):
+def _sstr(s) -> str:
+    """将List对象转换为字符串。List为空返回None空字符串"""
+    return ','.join(str(item) for item in s) if s else ""
+
+def _sdec(s) -> str:
     """str decimal"""
     return str(s).replace(",", "") if s else "0.00"

@@ -17,7 +17,9 @@ class Stock:
         if not resp:
             return {}
 
-        data = (resp.get("Body") or {}).get("Stocks") or {}
+        body = resp.get("SuccessResponse", {}).get("Body") or {}
+
+        data = body.get("Stocks") or {}
 
         SellerWarehouses = data.get("SellerWarehouses") or []
         FulfillmentWarehouses = data.get("FulfillmentWarehouses") or []
@@ -44,7 +46,7 @@ class Stock:
             "FulfillmentWarehouses": FulfillmentWarehouses,
         }
 
-    def get_stock(self, search: Dict):
+    async def get_stocks(self, search: Dict):
 
         resp = self.shop.request(
             method="GET",
@@ -63,22 +65,24 @@ class Stock:
         await DBManager.upsert("falabella_stock_sellerwarehouses", SellerWarehouses, ["SellerId", "Sku"])
         await DBManager.upsert("falabella_stock_fulfillmentwarehouses", FulfillmentWarehouses, ["SellerId", "Sku"])
 
-    async def sync_stock(self, search: Dict):
+    async def sync_stocks(self, search: Dict):
         """全量同步商品 (自动翻页)。返回同步总数。"""
-        limit = 1000
-        offset = 0
-        count = None
+        limit   = search.get("Limit")  or 1000
+        offset  = search.get("Offset") or 0
+        count   = None
 
         while count is None or False:
 
             search.update({"Limit": limit, "Offset": offset})
 
-            resp = self.get_stock(search)
+            resp = await self.get_stocks(search)
+
+            if count is None:
+                count = 0
 
             if not resp:
                 continue
             else:
-                count = 0
                 resp = self.parse(resp)
                 if resp:
                     await self.save(resp)

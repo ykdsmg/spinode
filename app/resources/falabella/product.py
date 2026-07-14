@@ -15,7 +15,9 @@ class Product:
         if not resp:
             return {}
 
-        data = ((resp.get("Body") or {}).get("Products") or {}).get("Product")
+        body = resp.get("SuccessResponse",{}).get("Body") or {}
+
+        data = body.get("Products",{}).get("Product") or []
 
         if not data:
             return {}
@@ -27,66 +29,61 @@ class Product:
             if isinstance(data, dict):
                 data = [data]
             for Product in data:
-                seller_id = self.shop.seller_id
-                seller_sku = Product.get("SellerSku")
-                shop_sku = Product.get("ShopSku")
+                seller_id       = self.shop.seller_id
+                seller_sku      = Product.get("SellerSku")
+                shop_sku        = Product.get("ShopSku")
 
-                Images = (Product.get("Images") or {}).get("Image", []) or []
-                BusinessUnit = (Product.get("BusinessUnits") or {}).get(
-                    "BusinessUnit"
-                ) or {}
-                ProductData = Product.get("ProductData") or {}
+                Images          = Product.get("Images",{}).get("Image") or []
+                BusinessUnit    = Product.get("BusinessUnits",{}).get("BusinessUnit") or {}
+                ProductData     = Product.get("ProductData") or {}
                 pro_info = {
-                    "SellerSku": seller_sku,
-                    "SellerId": seller_id,
-                    "ShopSku": shop_sku,
-                    "Name": Product.get("Name"),
-                    "Variation": Product.get("Variation"),
-                    "ProductId": Product.get("ProductId"),
-                    "ParentSku": Product.get("ParentSku"),
-                    "Url": Product.get("Url"),
-                    "ContentScore": Product.get("ContentScore"),
-                    "Description": Product.get("Description"),
-                    "TaxClass": Product.get("TaxClass"),
-                    "Brand": Product.get("Brand"),
-                    "PrimaryCategory": Product.get("PrimaryCategory"),
-                    "QCStatus": Product.get("QCStatus"),
-                    "PrimaryCategoryId": Product.get("PrimaryCategoryId"),
+                    "SellerSku":        seller_sku,
+                    "SellerId":         seller_id,
+                    "ShopSku":          shop_sku,
+                    "Name":             Product.get("Name"),
+                    "Variation":        Product.get("Variation"),
+                    "ProductId":        Product.get("ProductId"),
+                    "ParentSku":        Product.get("ParentSku"),
+                    "Url":              Product.get("Url"),
+                    "ContentScore":     Product.get("ContentScore"),
+                    # "Description":      Product.get("Description"),
+                    "TaxClass":         Product.get("TaxClass"),
+                    "Brand":            Product.get("Brand"),
+                    "PrimaryCategory":  Product.get("PrimaryCategory"),
+                    "QCStatus":         Product.get("QCStatus"),
+                    "PrimaryCategoryId":Product.get("PrimaryCategoryId"),
                 }
                 ima_info = [
                     {
-                        "RBProductId": None,
-                        "SellerSku": seller_sku,
-                        "ShopSku": shop_sku,
-                        "SellerId": seller_id,
-                        "ImageUrl": url,
-                        "SortOrder": i + 1,
-                        "IsMain": 1 if i == 0 else 0,
+                        "RBProductId":      None,
+                        "SellerSku":        seller_sku,
+                        "ShopSku":          shop_sku,
+                        "ImageUrl":         url,
+                        "SortOrder":        i + 1,
+                        "IsMain":           1 if i == 0 else 0,
                     }
-                    for i, url in Images
+                    for i, url in enumerate(Images)
                 ]
                 bus_info = {
-                    "RBProductId": None,
-                    "SellerSku": seller_sku,
-                    "SellerId": seller_id,
-                    "ShopSku": shop_sku,
-                    "BusinessUnit": BusinessUnit.get("BusinessUnit"),
-                    "OperatorCode": BusinessUnit.get("OperatorCode"),
-                    "Price": BusinessUnit.get("Price") or None,
-                    "SpecialPrice": BusinessUnit.get("SpecialPrice") or None,
-                    "SpecialFromDate": BusinessUnit.get("SpecialFromDate") or None,
-                    "SpecialToDate": BusinessUnit.get("SpecialToDate") or None,
-                    "Status": BusinessUnit.get("Status"),
-                    "IsPublished": BusinessUnit.get("IsPublished"),
+                    "RBProductId":      None,
+                    "SellerSku":        seller_sku,
+                    "ShopSku":          shop_sku,
+                    "BusinessUnit":     BusinessUnit.get("BusinessUnit"),
+                    "OperatorCode":     BusinessUnit.get("OperatorCode"),
+                    "Price":            BusinessUnit.get("Price")           or None,
+                    "SpecialPrice":     BusinessUnit.get("SpecialPrice")    or None,
+                    "SpecialFromDate":  BusinessUnit.get("SpecialFromDate") or None,
+                    "SpecialToDate":    BusinessUnit.get("SpecialToDate")   or None,
+                    "Status":           BusinessUnit.get("Status"),
+                    "IsPublished":      BusinessUnit.get("IsPublished"),
                 }
                 abt_info = [
                     {
-                        "RBProductId": None,
-                        "SellerSku": seller_sku,
-                        "ShopSku": shop_sku,
-                        "SellerId": seller_id,
-                        "AttributeName": k,
-                        "AttributeValue": y,
+                        "RBProductId":      None,
+                        "SellerSku":        seller_sku,
+                        "ShopSku":          shop_sku,
+                        "AttributeName":    k,
+                        "AttributeValue":   y,
                     }
                     for k, y in ProductData.items()
                 ]
@@ -115,47 +112,43 @@ class Product:
         )
 
         id_map = {
-            (item["SellerSku"], item["ShopSku"], item["SellerId"]): item["ID"]
+            (item["SellerSku"], str(item["ShopSku"])): item["ID"]
             for item in await DBManager.select(
-                "SELECT ID,SellerSku,ShopSku,SellerId FROM falabella_product WHERE SellerId = %s",
-                [self.shop.seller_id],
+                "SELECT ID,SellerSku,ShopSku FROM falabella_product WHERE SellerId = %s",[self.shop.seller_id],
             )
         }
 
         for item in ima_info:
             item["RBProductId"] = id_map.get(
-                (item["SellerSku"], item["ShopSku"], item["SellerId"])
+                (item["SellerSku"], item["ShopSku"])
             )
             item.pop("SellerSku")
             item.pop("ShopSku")
-            item.pop("SellerId")
         await DBManager.upsert(
             "falabella_product_image", ima_info, ["RBProductId", "SortOrder"]
         )
 
         for item in bus_info:
             item["RBProductId"] = id_map.get(
-                (item["SellerSku"], item["ShopSku"], item["SellerId"])
+                (item["SellerSku"], item["ShopSku"])
             )
             item.pop("SellerSku")
             item.pop("ShopSku")
-            item.pop("SellerId")
         await DBManager.upsert(
             "falabella_product_business_unit", bus_info, ["RBProductId"]
         )
 
         for item in abt_info:
             item["RBProductId"] = id_map.get(
-                (item["SellerSku"], item["ShopSku"], item["SellerId"])
+                (item["SellerSku"], item["ShopSku"])
             )
             item.pop("SellerSku")
             item.pop("ShopSku")
-            item.pop("SellerId")
         await DBManager.upsert(
             "falabella_product_attribute", abt_info, ["RBProductId", "AttributeName"]
         )
 
-    def get_product(self, search: Dict):
+    async def get_products(self, search: Dict):
 
         resp = self.shop.request(
             method="GET",
@@ -166,13 +159,19 @@ class Product:
 
     async def sync_products(self, search: Dict):
         """全量同步商品 (自动翻页)。返回同步总数。"""
-        limit = 1000
-        offset = 0
+        limit = search.get("Limit", 1000)
+        offset = search.get("Offset", 0)
         count = None
         while count is None or offset < count:
             search.update({"Limit": limit, "Offset": offset})
 
-            resp = self.get_product(search)
+            resp = await self.get_products(search)
+
+            if count is None:
+                count = 0
+
+            count += len(resp.get("SuccessResponse",{}).get("Body",{}).get("Products",{}).get("Product"))
+
             if not resp:
                 continue
             else:

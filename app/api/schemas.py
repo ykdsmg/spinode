@@ -59,8 +59,8 @@ class FLProductSearch(BaseModel):
 class FLStockSearch(BaseModel):
     """stock"""
 
-    Limit:              int | None = 1000
-    Offset:             int | None = 0
+    Limit:              int | None = None
+    Offset:             int | None = None
     SellerSku:          str | None = None
     FacilityId:         str | None = None
     SellerWarehouseId:  str | None = None

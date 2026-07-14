@@ -93,7 +93,7 @@ class FalabellaShop:
         method: str,
         action: str,
         *,
-        timeout: int = 30,
+        timeout: int = 60,
         params: dict | None = None,
     ) -> dict:
         """统一 HTTP 请求入口，自带签名。
