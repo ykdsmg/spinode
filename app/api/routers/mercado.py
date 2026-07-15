@@ -19,6 +19,7 @@ Mercado Libre 路由: 商品/变体/订单/货运/库存/评价/账单/广告 �
 """
 # package
 # import json
+import traceback
 from aiolimiter import AsyncLimiter
 
 # fastapi
@@ -58,12 +59,15 @@ async def advertise_sync(
     for shop in targets:
         try:
             await Advertise(shop).sync_advertisers(PRODUCT_ID)
-        except HTTPException:
-            raise
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"sync mercado shop's advertisers failed for shop {shop.seller_id}  error:{e}",
+            return ApiResponse(
+                success=False,
+                message=f"sync mercado shop's advertisers failed for shop {shop.seller_id}",
+                error = {
+                    "type":         type(e).__name__,        # 异常类型
+                    "message":      str(e),                  # 异常消息
+                    "traceback":    traceback.format_exc(),  # 完整堆栈
+                },
             )
 
     return ApiResponse(success=True, message="sync mercado shop's advertisers done")
@@ -81,12 +85,15 @@ async def adgroups_sync(
     for shop in targets:
         try:
             await Advertise(shop).sync_adgroups()
-        except HTTPException:
-            raise
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"sync Mercado adgroups failed for shop {shop.seller_id}: {e}",
+            return ApiResponse(
+                success=False,
+                message=f"sync Mercado adgroups failed for shop {shop.seller_id}",
+                error = {
+                    "type":         type(e).__name__,        # 异常类型
+                    "message":      str(e),                  # 异常消息
+                    "traceback":    traceback.format_exc(),  # 完整堆栈
+                },
             )
 
     return ApiResponse(
@@ -109,12 +116,15 @@ async def adgroups_details_sync(
     for shop in targets:
         try:
             await Advertise(shop).sync_adgroup_details(data_at, data_to)
-        except HTTPException:
-            raise
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"sync Mercado adgroups details failed for shop {shop.seller_id}: {e}",
+            return ApiResponse(
+                success=False,
+                message=f"sync Mercado adgroups details failed for shop {shop.seller_id}",
+                error = {
+                    "type":         type(e).__name__,        # 异常类型
+                    "message":      str(e),                  # 异常消息
+                    "traceback":    traceback.format_exc(),  # 完整堆栈
+                },
             )
 
     return ApiResponse(
@@ -135,12 +145,15 @@ async def advertise_search(
 
     try:
         resp = await Advertise(shop).get_advertisers(product_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"search Mercado advertisers failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"search Mercado advertisers failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -167,12 +180,15 @@ async def adgroups_search(
 
     try:
         resp = await Advertise(shop).get_adgroups(advertiser_site_id, advertiser_id, limit, offset, data_at, data_to)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"search Mercado adgroups failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"search Mercado adgroups failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -197,12 +213,15 @@ async def adgroups_details_search(
 
     try:
         resp = await Advertise(shop).get_adgroup_details(advertiser_site_id, ad_group_id, data_at, data_to)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"search Mercado adgroup_details failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"search Mercado adgroup_details failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -230,12 +249,15 @@ async def pack_get(
 
     try:
         resp = await Order(shop).get_pack(pack_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado pack failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado pack failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -263,12 +285,15 @@ async def order_sync(
     for shop in targets:
         try:
             await Order(shop).sync_order(search_dict)
-        except HTTPException:
-            raise
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"sync mercado orders failed for shop {shop.seller_id}: {e}",
+            return ApiResponse(
+                success=False,
+                message=f"sync mercado orders failed for shop {shop.seller_id}",
+                error = {
+                    "type":         type(e).__name__,        # 异常类型
+                    "message":      str(e),                  # 异常消息
+                    "traceback":    traceback.format_exc(),  # 完整堆栈
+                },
             )
 
     return ApiResponse(success=True, message="sync mercado orders done")
@@ -291,12 +316,15 @@ async def order_search(
 
     try:
         resp = await Order(shop).search_order(search_dict)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"search mercado orders failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"search mercado orders failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -320,12 +348,15 @@ async def order_get(
 
     try:
         resp = await Order(shop).get_order(order_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado order failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado order failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -349,12 +380,15 @@ async def shipment_get(shipment_id: str, shops = Depends(get_shops), seller_id: 
 
     try:
         resp = await Order(shop).get_shipment(shipment_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado shipment failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado shipment failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -375,12 +409,15 @@ async def shipment_history_get(shipment_id: str, shops = Depends(get_shops), sel
 
     try:
         resp = await Order(shop).get_shipment_history(shipment_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado shipment history failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado shipment history failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -401,12 +438,15 @@ async def shipment_sla_get(shipment_id: str, shops = Depends(get_shops), seller_
 
     try:
         resp = await Order(shop).get_shipment_sla(shipment_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado shipment sla failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado shipment sla failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -431,14 +471,15 @@ async def payment_get(payment_id: str, shops = Depends(get_shops), seller_id: in
 
     try:
         resp = await Order(shop).get_payment(payment_id)
-        # payment_row, charge_rows = Order(shop).parse_payment(resp)
-        # await Order(shop).save_payment(payment_row, charge_rows)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado payment failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado payment failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -460,12 +501,15 @@ async def discount_get(order_id: str, shops = Depends(get_shops), seller_id: int
     try:
         resp = await Order(shop).get_discount(order_id)
 
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado discount failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado discount failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -489,12 +533,15 @@ async def get_mercado_stock(user_product_id: str, shops = Depends(get_shops), se
 
     try:
         resp = await Stock(shop).get_stock(user_product_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado stock failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado stock failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -514,12 +561,15 @@ async def get_inventories(inventory_id: str, shops = Depends(get_shops), seller_
 
     try:
         resp = await Stock(shop).get_fulfillment_stock(inventory_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado fulfillment stock failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado fulfillment stock failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -539,12 +589,15 @@ async def sync_stock(shops = Depends(get_shops), seller_id: int = Query()):
     for shop in targets:
         try:
             await Stock(shop).sync_stock(stock_limit)
-        except HTTPException:
-            raise
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"get mercado stock failed for shop {seller_id}: {e}",
+            return ApiResponse(
+                success=False,
+                message=f"get mercado stock failed for shop {seller_id}",
+                error = {
+                    "type":         type(e).__name__,        # 异常类型
+                    "message":      str(e),                  # 异常消息
+                    "traceback":    traceback.format_exc(),  # 完整堆栈
+                },
             )
 
     return ApiResponse(
@@ -567,12 +620,15 @@ async def get_product(item_id: str, shops = Depends(get_shops), seller_id: int =
 
     try:
         resp = await Product(shop).get_product(item_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado product failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado product failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -592,12 +648,15 @@ async def get_variation(item_id: str, variation_id: str, shops = Depends(get_sho
 
     try:
         resp = await Product(shop).get_variation(item_id, variation_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado variation failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado variation failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -616,12 +675,15 @@ async def sync_product(shops = Depends(get_shops), seller_id: int = Query()):
         try:
             await Product(shop).sync_product()
             await Product(shop).sync_variation()
-        except HTTPException:
-            raise
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"sync mercado product failed for shop {seller_id}: {e}",
+            return ApiResponse(
+                success=False,
+                message=f"sync mercado product failed for shop {seller_id}",
+                error = {
+                    "type":         type(e).__name__,        # 异常类型
+                    "message":      str(e),                  # 异常消息
+                    "traceback":    traceback.format_exc(),  # 完整堆栈
+                },
             )
 
     return ApiResponse(
@@ -649,12 +711,15 @@ async def get_Periods(
 
     try:
         resp = await Billing(shop).Periods(group=group, document_type=document_type)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado billing periods failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado billing periods failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -682,12 +747,15 @@ async def get_Billing(
 
     try:
         resp = await Billing(shop).Billing(key=key, group=group, document_type=document_type, limit=limit, from_id=from_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get mercado billing failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get mercado billing failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -709,12 +777,15 @@ async def sync_billing(
     for shop in targets:
         try:
             await Billing(shop).sync_billing(key = key)
-        except HTTPException:
-            raise
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"sync mercado billing failed for shop {seller_id}: {e}",
+            return ApiResponse(
+                success=False,
+                message=f"sync mercado billing failed for shop {seller_id}",
+                error = {
+                    "type":         type(e).__name__,        # 异常类型
+                    "message":      str(e),                  # 异常消息
+                    "traceback":    traceback.format_exc(),  # 完整堆栈
+                },
             )
 
     return ApiResponse(
@@ -734,12 +805,15 @@ async def sync_periods(
     for shop in targets:
         try:
             await Billing(shop).sync_periods()
-        except HTTPException:
-            raise
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"sync mercado billing periods failed for shop {seller_id}: {e}",
+            return ApiResponse(
+                success=False,
+                message=f"sync mercado billing periods failed for shop {seller_id}",
+                error = {
+                    "type":         type(e).__name__,        # 异常类型
+                    "message":      str(e),                  # 异常消息
+                    "traceback":    traceback.format_exc(),  # 完整堆栈
+                },
             )
 
     return ApiResponse(

@@ -13,16 +13,7 @@ class ApiResponse(BaseModel):
     success:        bool = True
     message:        str = ""
     data:           dict | list | None = None
-    timestamp:      str = Field(default_factory=lambda: datetime.now().isoformat())
-
-
-class ErrorResponse(BaseModel):
-    """错误响应。"""
-
-    success:        bool = False
-    message:        str
-    error_code:     str = "UNKNOWN"
-    detail:         dict | list | None = None
+    error:          dict | None = None
     timestamp:      str = Field(default_factory=lambda: datetime.now().isoformat())
 
 

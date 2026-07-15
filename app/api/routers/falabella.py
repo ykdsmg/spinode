@@ -7,6 +7,7 @@ Falabella 路由:
 
 # package
 # import json
+import traceback
 
 # fastapi
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
@@ -45,12 +46,15 @@ async def order_sync(
     for shop in targets:
         try:
             await Order(shop).sync_order(search)
-        except HTTPException:
-            raise
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"sync falabella order failed for shop {shop.seller_id}: {e}",
+            return ApiResponse(
+                success=False,
+                message=f"sync falabella order failed for shop {shop.seller_id}",
+                error = {
+                    "type":         type(e).__name__,        # 异常类型
+                    "message":      str(e),                  # 异常消息
+                    "traceback":    traceback.format_exc(),  # 完整堆栈
+                },
             )
 
     return ApiResponse(
@@ -73,12 +77,15 @@ async def order_get(
 
     try:
         resp = await Order(shop).get_order(order_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get falabella order failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get falabella order failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -102,12 +109,15 @@ async def orders_search(
 
     try:
         resp = await Order(shop).get_orders(search)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get falabella order failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get falabella order failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -131,12 +141,15 @@ async def orderitem_get(
 
     try:
         resp = await Order(shop).get_item(order_id)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get falabella order - item failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get falabella order - item failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -159,12 +172,15 @@ async def orderitems_search(
 
     try:
         resp = await Order(shop).get_items(order_ids)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get falabella order - items failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get falabella order - items failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -191,12 +207,15 @@ async def product_search(
 
     try:
         resp = await Product(shop).get_products(search)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get falabella product failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get falabella product failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -221,12 +240,15 @@ async def product_sync(
 
     try:
         resp = await Product(shop).sync_products(search)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"sync falabella products failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"sync falabella products failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -254,12 +276,15 @@ async def stocks_search(
 
     try:
         resp = await Stock(shop).get_stocks(search)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"get falabella product stock failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"get falabella product stock failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
@@ -283,12 +308,15 @@ async def stocks_sync(
 
     try:
         resp = await Stock(shop).sync_stocks(search)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"sync falabella product stock failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"sync falabella product stock failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(

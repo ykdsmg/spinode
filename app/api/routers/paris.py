@@ -5,6 +5,7 @@
 """
 # package
 # import json
+import traceback
 
 # fastapi
 from fastapi import APIRouter, HTTPException, Query, Path, Request, Depends
@@ -44,12 +45,15 @@ async def order_sync(
     for shop in shops.values():
             try:
                 await Order(shop).sync(search)
-            except HTTPException:
-                raise
             except Exception as e:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"sync paris orders failed for shop {shop.seller_id}: {e}",
+                return ApiResponse(
+                    success=False,
+                    message=f"sync paris orders failed for shop {shop.seller_id}",
+                    error = {
+                        "type":         type(e).__name__,        # 异常类型
+                        "message":      str(e),                  # 异常消息
+                        "traceback":    traceback.format_exc(),  # 完整堆栈
+                    },
                 )
 
     return ApiResponse(success=True, message="sync paris orders done")
@@ -73,12 +77,15 @@ async def order_search(
 
     try:
         resp = await Order(shop).search(search)
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"search orders failed for shop {seller_id}: {e}",
+        return ApiResponse(
+            success=False,
+            message=f"search orders failed for shop {seller_id}",
+            error = {
+                "type":         type(e).__name__,        # 异常类型
+                "message":      str(e),                  # 异常消息
+                "traceback":    traceback.format_exc(),  # 完整堆栈
+            },
         )
 
     return ApiResponse(
