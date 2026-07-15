@@ -1,25 +1,36 @@
 """
-Mercado Libre 路由: 商品/变体/订单/货运/库存/评价/账单/广告 共 7 个资源。
+Mercado Libre 路由: 广告/包裹/订单/货运/支付/折扣/库存/商品/账单 共 9 个资源。
 
 路由结构:
-  GET /mercado/ads/advertisers/sync                                — 全量同步广告主
-  GET /mercado/ads/advertisers/search                              — 搜索广告主
-  GET /mercado/ads/adgroups/sync                                   — 全量同步广告组
-  GET /mercado/ads/adgroups/search                                 — 搜索广告组
-  GET /mercado/ads/adgroups/details/sync                           — 全量同步广告组详情
-  GET /mercado/ads/adgroup/details/search                          — 搜索广告组详情
-  GET /mercado/order/sync                                          — 全量同步订单
-  GET /mercado/order/search                                        — 搜索订单
-  GET /mercado/order/{order_id}                                    — 获取单个订单
-  GET /mercado/shipment/{shipment_id}                              — 获取货运详情
-  GET /mercado/shipment/{shipment_id}/history                      — 获取货运历史
-  GET /mercado/shipment/{shipment_id}/sla                          — 获取货运SLA
-  GET /mercado/payment/{payment_id}                                — 获取支付详情
+  GET  /mercado/ads/advertisers/sync                            — 全量同步广告主
+  GET  /mercado/ads/advertisers/search                          — 搜索广告主
+  GET  /mercado/ads/adgroups/sync                               — 全量同步广告组
+  GET  /mercado/ads/adgroups/search                             — 搜索广告组
+  GET  /mercado/ads/adgroups/details/sync                       — 全量同步广告组详情
+  GET  /mercado/ads/adgroup/details/search                      — 搜索广告组详情
+  GET  /mercado/order/pack/{pack_id}                            — 获取包裹
+  GET  /mercado/orders/sync                                     — 全量同步订单
+  GET  /mercado/orders/search                                   — 搜索订单
+  GET  /mercado/order/{order_id}                                — 获取单个订单
+  GET  /mercado/shipment/{shipment_id}                          — 获取货运详情
+  GET  /mercado/shipment/{shipment_id}/history                  — 获取货运历史
+  GET  /mercado/shipment/{shipment_id}/sla                      — 获取货运SLA
+  GET  /mercado/payment/{payment_id}                            — 获取支付详情
+  GET  /mercado/discount/{order_id}                             — 获取订单折扣
+  GET  /mercado/stock/user_product/{user_product_id}            — 获取库存
+  GET  /mercado/stock/inventory/{inventory_id}                  — 获取Fulfillment库存
+  GET  /mercado/stock/sync/user_product                         — 全量同步库存
+  GET  /mercado/product/item/{item_id}                          — 获取商品(/w description)
+  GET  /mercado/product/item/{item_id}/variation/{variation_id} — 获取商品变体
+  GET  /mercado/shops/product/sync/                             — 全量同步商品
+  GET  /mercado/billing/Periods                                 — 获取账单周期
+  GET  /mercado/Periods/billing                                 — 获取账单
+  GET  /mercado/shops/Periods/billing/sync/                     — 全量同步账单
+  GET  /mercado/shops/billing/Periods/sync/                     — 全量同步账单周期
 
 """
 # package
 # import json
-import traceback
 from aiolimiter import AsyncLimiter
 
 # fastapi
@@ -62,12 +73,7 @@ async def advertise_sync(
         except Exception as e:
             return ApiResponse(
                 success=False,
-                message=f"sync mercado shop's advertisers failed for shop {shop.seller_id}",
-                error = {
-                    "type":         type(e).__name__,        # 异常类型
-                    "message":      str(e),                  # 异常消息
-                    "traceback":    traceback.format_exc(),  # 完整堆栈
-                },
+                message=f"type: {type(e).__name__}, error: {str(e)}",
             )
 
     return ApiResponse(success=True, message="sync mercado shop's advertisers done")
@@ -88,12 +94,7 @@ async def adgroups_sync(
         except Exception as e:
             return ApiResponse(
                 success=False,
-                message=f"sync Mercado adgroups failed for shop {shop.seller_id}",
-                error = {
-                    "type":         type(e).__name__,        # 异常类型
-                    "message":      str(e),                  # 异常消息
-                    "traceback":    traceback.format_exc(),  # 完整堆栈
-                },
+                message=f"type: {type(e).__name__}, error: {str(e)}",
             )
 
     return ApiResponse(
@@ -119,12 +120,7 @@ async def adgroups_details_sync(
         except Exception as e:
             return ApiResponse(
                 success=False,
-                message=f"sync Mercado adgroups details failed for shop {shop.seller_id}",
-                error = {
-                    "type":         type(e).__name__,        # 异常类型
-                    "message":      str(e),                  # 异常消息
-                    "traceback":    traceback.format_exc(),  # 完整堆栈
-                },
+                message=f"type: {type(e).__name__}, error: {str(e)}",
             )
 
     return ApiResponse(
@@ -148,12 +144,7 @@ async def advertise_search(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"search Mercado advertisers failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -183,12 +174,7 @@ async def adgroups_search(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"search Mercado adgroups failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -216,12 +202,7 @@ async def adgroups_details_search(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"search Mercado adgroup_details failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -252,12 +233,7 @@ async def pack_get(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado pack failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -270,7 +246,7 @@ async def pack_get(
 # Order
 # ═════════════════════════════════════════════════════════
 
-@router.get("/mercado/order/sync", response_model=ApiResponse)
+@router.get("/mercado/orders/sync", response_model=ApiResponse)
 async def order_sync(
     shops                 = Depends(get_shops),
     seller_id:        int = Query(None, description="同步指定店铺, 默认None同步所有店铺"),
@@ -284,21 +260,17 @@ async def order_sync(
 
     for shop in targets:
         try:
+            search_dict["seller"] = shop.seller_id
             await Order(shop).sync_order(search_dict)
         except Exception as e:
             return ApiResponse(
                 success=False,
-                message=f"sync mercado orders failed for shop {shop.seller_id}",
-                error = {
-                    "type":         type(e).__name__,        # 异常类型
-                    "message":      str(e),                  # 异常消息
-                    "traceback":    traceback.format_exc(),  # 完整堆栈
-                },
+                message=f"type: {type(e).__name__}, error: {str(e)}",
             )
 
     return ApiResponse(success=True, message="sync mercado orders done")
 
-@router.get("/mercado/order/search", response_model=ApiResponse)
+@router.get("/mercado/orders/search", response_model=ApiResponse)
 async def order_search(
     shops                 = Depends(get_shops),
     seller_id:        int = Query(),
@@ -319,12 +291,7 @@ async def order_search(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"search mercado orders failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -351,12 +318,7 @@ async def order_get(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado order failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -383,12 +345,7 @@ async def shipment_get(shipment_id: str, shops = Depends(get_shops), seller_id: 
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado shipment failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -412,12 +369,7 @@ async def shipment_history_get(shipment_id: str, shops = Depends(get_shops), sel
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado shipment history failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -441,12 +393,7 @@ async def shipment_sla_get(shipment_id: str, shops = Depends(get_shops), seller_
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado shipment sla failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -474,12 +421,7 @@ async def payment_get(payment_id: str, shops = Depends(get_shops), seller_id: in
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado payment failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -504,12 +446,7 @@ async def discount_get(order_id: str, shops = Depends(get_shops), seller_id: int
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado discount failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -536,12 +473,7 @@ async def get_mercado_stock(user_product_id: str, shops = Depends(get_shops), se
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado stock failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -564,12 +496,7 @@ async def get_inventories(inventory_id: str, shops = Depends(get_shops), seller_
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado fulfillment stock failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -592,12 +519,7 @@ async def sync_stock(shops = Depends(get_shops), seller_id: int = Query()):
         except Exception as e:
             return ApiResponse(
                 success=False,
-                message=f"get mercado stock failed for shop {seller_id}",
-                error = {
-                    "type":         type(e).__name__,        # 异常类型
-                    "message":      str(e),                  # 异常消息
-                    "traceback":    traceback.format_exc(),  # 完整堆栈
-                },
+                message=f"type: {type(e).__name__}, error: {str(e)}",
             )
 
     return ApiResponse(
@@ -623,12 +545,7 @@ async def get_product(item_id: str, shops = Depends(get_shops), seller_id: int =
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado product failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -651,12 +568,7 @@ async def get_variation(item_id: str, variation_id: str, shops = Depends(get_sho
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado variation failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -678,12 +590,7 @@ async def sync_product(shops = Depends(get_shops), seller_id: int = Query()):
         except Exception as e:
             return ApiResponse(
                 success=False,
-                message=f"sync mercado product failed for shop {seller_id}",
-                error = {
-                    "type":         type(e).__name__,        # 异常类型
-                    "message":      str(e),                  # 异常消息
-                    "traceback":    traceback.format_exc(),  # 完整堆栈
-                },
+                message=f"type: {type(e).__name__}, error: {str(e)}",
             )
 
     return ApiResponse(
@@ -714,12 +621,7 @@ async def get_Periods(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado billing periods failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -750,12 +652,7 @@ async def get_Billing(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get mercado billing failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -780,12 +677,7 @@ async def sync_billing(
         except Exception as e:
             return ApiResponse(
                 success=False,
-                message=f"sync mercado billing failed for shop {seller_id}",
-                error = {
-                    "type":         type(e).__name__,        # 异常类型
-                    "message":      str(e),                  # 异常消息
-                    "traceback":    traceback.format_exc(),  # 完整堆栈
-                },
+                message=f"type: {type(e).__name__}, error: {str(e)}",
             )
 
     return ApiResponse(
@@ -808,12 +700,7 @@ async def sync_periods(
         except Exception as e:
             return ApiResponse(
                 success=False,
-                message=f"sync mercado billing periods failed for shop {seller_id}",
-                error = {
-                    "type":         type(e).__name__,        # 异常类型
-                    "message":      str(e),                  # 异常消息
-                    "traceback":    traceback.format_exc(),  # 完整堆栈
-                },
+                message=f"type: {type(e).__name__}, error: {str(e)}",
             )
 
     return ApiResponse(

@@ -1,13 +1,20 @@
 """
-Falabella 路由:
+Falabella 路由: 订单/商品/库存 共 3 个资源。
 
 路由结构:
-  GET  /falabella/order/{order_id}           — 获取单个订单
+  GET  /falabella/orders/sync              — 全量同步订单
+  GET  /falabella/order/{order_id}         — 获取单个订单
+  GET  /falabella/orders/search            — 搜索订单
+  GET  /falabella/orderitem/{order_id}     — 获取订单商品(item)
+  GET  /falabella/orderitems/{order_ids}   — 获取订单商品列表(items)
+  GET  /falabella/products/search          — 搜索商品
+  GET  /falabella/products/sync            — 全量同步商品
+  GET  /falabella/stocks/search            — 搜索库存
+  GET  /falabella/stocks/sync              — 全量同步库存
 """
 
 # package
 # import json
-import traceback
 
 # fastapi
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
@@ -49,12 +56,7 @@ async def order_sync(
         except Exception as e:
             return ApiResponse(
                 success=False,
-                message=f"sync falabella order failed for shop {shop.seller_id}",
-                error = {
-                    "type":         type(e).__name__,        # 异常类型
-                    "message":      str(e),                  # 异常消息
-                    "traceback":    traceback.format_exc(),  # 完整堆栈
-                },
+                message=f"type: {type(e).__name__}, error: {str(e)}",
             )
 
     return ApiResponse(
@@ -80,12 +82,7 @@ async def order_get(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get falabella order failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -112,12 +109,7 @@ async def orders_search(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get falabella order failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -144,12 +136,7 @@ async def orderitem_get(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get falabella order - item failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -175,12 +162,7 @@ async def orderitems_search(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get falabella order - items failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -210,12 +192,7 @@ async def product_search(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get falabella product failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -243,12 +220,7 @@ async def product_sync(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"sync falabella products failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -279,12 +251,7 @@ async def stocks_search(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"get falabella product stock failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
@@ -311,12 +278,7 @@ async def stocks_sync(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"sync falabella product stock failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(

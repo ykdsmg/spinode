@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone, timedelta
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ── 通用响应 ──────────────────────────────────────────
 
@@ -13,7 +13,6 @@ class ApiResponse(BaseModel):
     success:        bool = True
     message:        str = ""
     data:           dict | list | None = None
-    error:          dict | None = None
     timestamp:      str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -60,10 +59,10 @@ class FLStockSearch(BaseModel):
 class MLOrderSearch(BaseModel):
     """订单搜索参数。"""
 
-    datatype:  int | None = 0
-    at:   datetime | None = Field(default_factory=lambda: datetime.now(tz=timezone.utc) - timedelta(minutes=30))
-    to:   datetime | None = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
-    sort:      str | None = "date_asc"
+    datatype:  int | None = None
+    at:   datetime | None = None
+    to:   datetime | None = None
+    sort:      str | None = None
     item:      str | None = None
     status:    str | None = None
     seller:    str | None = None
@@ -71,6 +70,17 @@ class MLOrderSearch(BaseModel):
     offset:    int | None = None
     tags:      str | None = None
     q:         str | None = None
+
+    @model_validator(mode='after')
+    def set_default_dates(self):
+        if self.datatype is None:
+            self.datatype = 0
+        now = datetime.now(tz=timezone.utc)
+        if self.at is None:
+            self.at = now - timedelta(minutes=30)
+        if self.to is None:
+            self.to = now
+        return self
 
 # ── Paris ──────────────────────────────────────────
 class PROrderSearch(BaseModel):

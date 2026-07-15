@@ -3,7 +3,7 @@ Mercado order,shipment,pack,discount资源:请求/解析/存储/同步。
 """
 import asyncio
 from app.db.manager import DBManager
-from datetime import timedelta, timezone
+from datetime import timedelta
 from app.platform.MercadoShop import MercadoShop
 from typing import Dict, List
 from app.core.converters import _trim, _json, _str, _lstr
@@ -147,7 +147,7 @@ class Order:
                     "release_date":             _trim(item.get("release_date")),
                     "attributes":               _json(item.get("attributes")),
                     "quantity":                 order_item.get("quantity"),
-                    "requested_quantity":       order_item.get("requested_quantity"),
+                    "requested_quantity":       _json(order_item.get("requested_quantity")),
                     "picked_quantity":          order_item.get("picked_quantity"),
                     "unit_price":               order_item.get("unit_price"),
                     "currency_id":              order_item.get("currency_id"),
@@ -657,8 +657,8 @@ class Order:
         gte_key, lte_key = date_fields[datatype]
 
         if at and to:
-            params[gte_key] = at.replace(tzinfo=timezone.utc).isoformat()
-            params[lte_key] = to.replace(tzinfo=timezone.utc).isoformat()
+            params[gte_key] = at.isoformat()
+            params[lte_key] = to.isoformat()
         else:
             raise ValueError("at 和 to 必须同时提供")
 
@@ -682,16 +682,18 @@ class Order:
 
         for params in params_list:
 
-            limit = 50
-            offset = 0
-            total = None
+            limit   = params.get("limit", 50)
+            offset  = params.get("offset", 0)
+            total   = None
 
             while total is None or offset < total:
+
+                params.update({"limit": limit, "offset": offset})
 
                 resp = await self.shop.request(
                     method="GET",
                     url="/orders/search",
-                    params={**params, "limit": limit, "offset": offset},
+                    params=params,
                     headers={
                         "Content-Type": "application/json",
                     }

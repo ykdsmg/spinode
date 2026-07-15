@@ -1,11 +1,13 @@
-"""Paris 路由: 商品/变体/订单/货运/库存/评价/账单/用户 共 7 个资源。
+"""Paris 路由: 订单/商品/变体/货运/库存/评价/账单/用户 共 8 个资源。
 
 路由结构:
+  # Order
+  GET  /paris/shop/order/sync                   — 全量同步订单
+  GET  /paris/shop/{seller_id}/order/search     — 搜索订单
 
 """
 # package
 # import json
-import traceback
 
 # fastapi
 from fastapi import APIRouter, HTTPException, Query, Path, Request, Depends
@@ -48,12 +50,7 @@ async def order_sync(
             except Exception as e:
                 return ApiResponse(
                     success=False,
-                    message=f"sync paris orders failed for shop {shop.seller_id}",
-                    error = {
-                        "type":         type(e).__name__,        # 异常类型
-                        "message":      str(e),                  # 异常消息
-                        "traceback":    traceback.format_exc(),  # 完整堆栈
-                    },
+                    message=f"type: {type(e).__name__}, error: {str(e)}",
                 )
 
     return ApiResponse(success=True, message="sync paris orders done")
@@ -80,12 +77,7 @@ async def order_search(
     except Exception as e:
         return ApiResponse(
             success=False,
-            message=f"search orders failed for shop {seller_id}",
-            error = {
-                "type":         type(e).__name__,        # 异常类型
-                "message":      str(e),                  # 异常消息
-                "traceback":    traceback.format_exc(),  # 完整堆栈
-            },
+            message=f"type: {type(e).__name__}, error: {str(e)}",
         )
 
     return ApiResponse(
