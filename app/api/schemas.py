@@ -1,6 +1,6 @@
 """FastAPI 统一请求/响应 Pydantic 模型"""
 
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from pydantic import BaseModel, Field
 
@@ -70,9 +70,9 @@ class MLOrderSearch(BaseModel):
     """订单搜索参数。"""
 
     datatype:  int | None = 0
-    at:   datetime | None = None
-    to:   datetime | None = None
-    sort:      str | None = None
+    at:   datetime | None = Field(default_factory=lambda: datetime.now(tz=timezone.utc) - timedelta(minutes=30))
+    to:   datetime | None = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    sort:      str | None = "date_asc"
     item:      str | None = None
     status:    str | None = None
     seller:    str | None = None
@@ -80,10 +80,6 @@ class MLOrderSearch(BaseModel):
     offset:    int | None = None
     tags:      str | None = None
     q:         str | None = None
-
-
-
-
 
 # ── Paris ──────────────────────────────────────────
 class PROrderSearch(BaseModel):

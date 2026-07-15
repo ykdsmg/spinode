@@ -62,8 +62,8 @@ class Stock:
 
         SellerWarehouses = data.get("SellerWarehouses") or []
         FulfillmentWarehouses = data.get("FulfillmentWarehouses") or []
-        await DBManager.upsert("falabella_stock_sellerwarehouses", SellerWarehouses, ["SellerId", "Sku"])
-        await DBManager.upsert("falabella_stock_fulfillmentwarehouses", FulfillmentWarehouses, ["SellerId", "Sku"])
+        await DBManager.upsert("falabella_stock_sellerwarehouses", SellerWarehouses, ['SellerId','FacilityID','Sku'])
+        await DBManager.upsert("falabella_stock_fulfillmentwarehouses", FulfillmentWarehouses, ['SellerId','WarehouseId','Sku'])
 
     async def sync_stocks(self, search: Dict):
         """全量同步商品 (自动翻页)。返回同步总数。"""

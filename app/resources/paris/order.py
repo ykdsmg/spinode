@@ -193,7 +193,7 @@ class Order:
 
         # order 表
 
-        await DBManager.upsert("paris_order", order_rows, ["order_id"])
+        await DBManager.upsert("paris_order", order_rows, ["sub_order_number"])
 
         # 查回自增 id，供子表 main_id 外键
         order_numbers = [r["sub_order_number"] for r in order_rows]
@@ -214,9 +214,9 @@ class Order:
         if billing_address_rows:
             await DBManager.upsert("paris_order_address_billing", billing_address_rows, ["main_id"])
         if sub_rows:
-            await DBManager.upsert("paris_sub_order", sub_rows, ["main_id", "sub_order_id"])
+            await DBManager.upsert("paris_sub_order", sub_rows, ["sub_order_number"])
         if item_rows:
-            await DBManager.upsert("paris_order_item", item_rows, ["seller_id", "item_id"])
+            await DBManager.upsert("paris_order_item", item_rows, ["sub_order_number", "item_id"])
 
     # ── 同步 ──────────────────────────────────────
 

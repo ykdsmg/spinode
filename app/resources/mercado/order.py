@@ -1,12 +1,12 @@
 """
-Mercado order,shipment资源:请求/解析/存储/同步。
+Mercado order,shipment,pack,discount资源:请求/解析/存储/同步。
 """
 import asyncio
 from app.db.manager import DBManager
-from datetime import timedelta
+from datetime import timedelta, timezone
 from app.platform.MercadoShop import MercadoShop
 from typing import Dict, List
-from app.core.converters import _trim, _json, _str
+from app.core.converters import _trim, _json, _str, _lstr
 
 
 class Order:
@@ -46,8 +46,8 @@ class Order:
                     current_to = current_at + timedelta(days=1)
                     if current_to > to:
                         current_to = to
-                    params[gte_key] = current_at.strftime("%Y-%m-%d")
-                    params[lte_key] = current_to.strftime("%Y-%m-%d")
+                    params[gte_key] = current_at.isoformat()
+                    params[lte_key] = current_to.isoformat()
                     params_list.append(params.copy())
                     current_at += timedelta(days=1)
 
@@ -112,7 +112,7 @@ class Order:
                 "feedback_seller_id":           (feedback.get("seller") or {}).get("id"),
                 "feedback_buyer_id":            (feedback.get("buyer") or {}).get("id"),
                 "tags":                         _json(item.get("tags")),
-                "mediations":                   _json(item.get("mediations")),
+                "mediations":                   _json(item.get("mediations")),#mediations_id
                 "channel":                      context.get("channel"),
                 "site":                         context.get("site"),
                 "flows":                        _json(context.get("flows")),
@@ -160,7 +160,7 @@ class Order:
                     "discounts":                order_item.get("discounts"),
                     "bundle":                   order_item.get("bundle"),
                     "compat_id":                order_item.get("compat_id"),
-                    "node_id":                  stock.get("node_id"),
+                    "stock_node_id":            stock.get("node_id"),
                     "store_id":                 stock.get("store_id"),
                     "kit_instance_id":          order_item.get("kit_instance_id"),
                     "gross_price":              order_item.get("gross_price")
@@ -205,6 +205,10 @@ class Order:
                     "transaction_order_id":                     payment.get("transaction_order_id"),
                     "transaction_id":                           atm_transfer_reference.get("transaction_id"),
                     "company_id":                               atm_transfer_reference.get("company_id"),
+                    "available_actions":                        _json(payment.get("available_actions")),
+                    "marketplace_fee":                          payment.get("marketplace_fee"),
+                    "reference_id":                             payment.get("reference_id"),
+                    "visible_by":                               payment.get("visible_by"),
                 }
                 payment_rows.append(payment_row)
 
@@ -221,10 +225,10 @@ class Order:
             return {}
 
         sla =  {
-            "sla_status":data.get("status"),
-            "sla_expected_date":_trim(data.get("expected_date")),
-            "sla_service":data.get("service"),
-            "sla_last_updated":_trim(data.get("last_updated")),
+            "sla_status":           data.get("status"),
+            "sla_expected_date":    _trim(data.get("expected_date")),
+            "sla_service":          data.get("service"),
+            "sla_last_updated":     _trim(data.get("last_updated")),
         }
 
         return sla
@@ -237,11 +241,10 @@ class Order:
         origin =                data.get("origin") or {}
 
         shipment = {
-            "seller_id":                        self.shop.seller_id,
             "snapshot_id":                      snapshot_packing.get("snapshot_id"),
             "pack_hash":                        snapshot_packing.get('pack_hash'),
             "last_updated":                     _trim(data.get('last_updated')),
-            "threshold_cancellation":           data.get('threshold_cancellation'),#new
+            # "threshold_cancellation":           data.get('threshold_cancellation'),#new
             "substatus":                        data.get('substatus'),
             "date_created":                     _trim(data.get('date_created')),
             "declared_value":                   data.get('declared_value'),
@@ -254,19 +257,19 @@ class Order:
             "status":                           data.get('status'),
             "tracking_method":                  data.get('tracking_method'),
             "quotation":                        data.get('quotation'),
-            "items_types":                      data.get('items_types'),#list
+            "items_types":                      _lstr(data.get('items_types')),
             "node_id":                          (origin.get("node") or {}).get("node_id")
         }
 
 
-        buffering = lead_time.get("buffering") or {}
-        priority_class = lead_time.get("priority_class") or {}
-        shipping_method = lead_time.get("shipping_method") or {}
-        estimated_schedule_limit = lead_time.get("estimated_schedule_limit") or {}
-        estimated_delivery_limit = lead_time.get("estimated_delivery_limit") or {}
-        estimated_delivery_final = lead_time.get("estimated_delivery_final") or {}
-        estimated_delivery_extended = lead_time.get("estimated_delivery_extended") or {}
-        estimated_delivery_time  = lead_time.get("estimated_delivery_time") or {}
+        buffering                       = lead_time.get("buffering") or {}
+        priority_class                  = lead_time.get("priority_class") or {}
+        shipping_method                 = lead_time.get("shipping_method") or {}
+        estimated_schedule_limit        = lead_time.get("estimated_schedule_limit") or {}
+        estimated_delivery_limit        = lead_time.get("estimated_delivery_limit") or {}
+        estimated_delivery_final        = lead_time.get("estimated_delivery_final") or {}
+        estimated_delivery_extended     = lead_time.get("estimated_delivery_extended") or {}
+        estimated_delivery_time         = lead_time.get("estimated_delivery_time") or {}
         new_lead_time =  {
             "seller_id":                            self.shop.seller_id,
             "shipping_id":                          data.get('id'),
@@ -328,7 +331,6 @@ class Order:
 
         # ── 支付主表行 ──────────────────────────────────────
         payment_row = {
-            "seller_id":                    self.shop.seller_id,
             "payment_id":                   data.get("id"),
             "order_id":                     order_info.get("id"),
 
@@ -427,8 +429,8 @@ class Order:
             charge_accounts = charge.get("accounts") or {}
             charge_metadata = charge.get("metadata") or {}
             charge_row = {
-                "seller_id":            self.shop.seller_id,
                 "payment_id":           data.get("id"),
+                "order_id":             order_info.get("id"),
                 "charge_id":            charge.get("id"),
                 "charge_name":          charge.get("name"),
                 "charge_type":          charge.get("type"),
@@ -460,12 +462,11 @@ class Order:
 
         discount_rows = []
         for detail in details:
-            discount_type = detail.get("type", )
-            campaign_id = (detail.get("supplier") or {}).get("campaign_id")
-            cashback_id = (detail.get("cashback") or {}).get("id")
+            discount_type = detail.get("type")
 
-            counter_currency_id = (detail.get("counter_currency") or {}).get("currency_id")
-            counter_currency_value = (detail.get("counter_currency") or {}).get("value")
+            supplier = detail.get("supplier") or {}
+            counter_currency = detail.get("counter_currency") or {}
+
             items = detail.get("items") or []
             for item in items:
                 amounts = item.get("amounts") or {}
@@ -479,10 +480,9 @@ class Order:
                         "total":                amounts.get("total"),
                         "seller":               amounts.get("seller"),
                         "discount_type":        discount_type,
-                        "campaign_id":          campaign_id,
-                        "cashback_id":          cashback_id,
-                        "counter_currency_id":  counter_currency_id,
-                        "counter_currency_value": counter_currency_value,
+                        "idx_id":               supplier.get("campaign_id") or supplier.get("offer_id"),
+                        "currency_id":          counter_currency.get("currency_id"),
+                        "currency_value":       counter_currency.get("value"),
                     }
                 )
         return discount_rows
@@ -515,7 +515,7 @@ class Order:
             await DBManager.upsert(
                 "mercado_discount",
                 discount_rows,
-                conflict_cols=["seller_id", "item_id"],
+                conflict_cols=["main_id", "idx_id"],
             )
 
 
@@ -524,9 +524,9 @@ class Order:
         if not data:
             return {}
 
-        order_rows = data.get("order_rows") or []
-        item_rows = data.get("item_rows") or []
-        payment_rows = data.get("payment_rows") or []
+        order_rows      = data.get("order_rows") or []
+        item_rows       = data.get("item_rows") or []
+        payment_rows    = data.get("payment_rows") or []
 
         await DBManager.upsert("mercado_order", order_rows, ["seller_id","order_id"])
         placeholders = ','.join(['%s'] * len(order_rows))
@@ -657,12 +657,14 @@ class Order:
         gte_key, lte_key = date_fields[datatype]
 
         if at and to:
-            params[gte_key] = at
-            params[lte_key] = to
+            params[gte_key] = at.replace(tzinfo=timezone.utc).isoformat()
+            params[lte_key] = to.replace(tzinfo=timezone.utc).isoformat()
+        else:
+            raise ValueError("at 和 to 必须同时提供")
 
         resp = await self.shop.request(
             method="GET",
-            url="/orders",
+            url="/orders/search",
             params=params,
             headers={
                 "Content-Type": "application/json",
@@ -675,6 +677,8 @@ class Order:
 
         params_list = Order._build_params_(search)
 
+        seller_id = self.shop.seller_id
+
 
         for params in params_list:
 
@@ -686,7 +690,7 @@ class Order:
 
                 resp = await self.shop.request(
                     method="GET",
-                    url="/orders",
+                    url="/orders/search",
                     params={**params, "limit": limit, "offset": offset},
                     headers={
                         "Content-Type": "application/json",
@@ -710,8 +714,12 @@ class Order:
 
                 task_ment = []
                 task_sla  = []
+                task_discount = []
+
                 for item in shipping_rows:
-                    shipping_id = item['shipping_id']
+                    shipping_id = item.pop('shipping_id')
+                    order_id    = item['order_id']
+                    task_discount.append(self.get_discount(order_id))
                     task_ment.append(self.get_shipment(shipping_id))
                     task_sla.append(self.get_shipment_sla(shipping_id))
 
@@ -728,8 +736,8 @@ class Order:
                         shipment_parsed_list.append(shipment_parsed)
                         lead_time_parsed_list.append(lead_time_parsed)
 
-                await DBManager.upsert("shipments", shipment_parsed_list, conflict_cols=["shipping_id"])
-                await DBManager.upsert("shipments", shipment_parsed_list, conflict_cols=["shipping_id"])
+                await DBManager.upsert("mercado_order_shipment", shipment_parsed_list, conflict_cols=["main_id"])
+                await DBManager.upsert("mercado_shipment_lead", lead_time_parsed_list, conflict_cols=["main_id"])
 
                 resp_sla = await asyncio.gather(*task_sla)
                 shipmentsla_parsed_list = []
@@ -738,7 +746,41 @@ class Order:
                         continue
                     if isinstance(resp, Dict):
                         shipment_parsed = self.parse_shipmentsla(resp)
-                        shipment_parsed.update(item)
+                        shipment_parsed.update({"main_id": item["main_id"]})
                         shipmentsla_parsed_list.append(shipment_parsed)
 
-                await DBManager.upsert("shipmentsla", shipmentsla_parsed_list, conflict_cols=["shipping_id"])
+                await DBManager.upsert("mercado_shipment_lead", shipmentsla_parsed_list, conflict_cols=["main_id"])
+
+                resp_discount = await asyncio.gather(*task_discount)
+                discount_parsed_list = []
+                for item, resp in zip(shipping_rows, resp_discount):
+                    if isinstance(resp, Exception):
+                        continue
+                    if isinstance(resp, Dict):
+                        discount_parsed = self.parse_discount(resp)
+                        for row in discount_parsed:
+                            row.update({**item, "seller_id": seller_id})
+                        discount_parsed_list.extend(discount_parsed)
+
+                await DBManager.upsert("mercado_order_discount", discount_parsed_list, conflict_cols=["main_id"])
+
+                payment_ids = [item.get("payment_id") for item in parsed.get("payment_rows") or []]
+                pago_task = [self.get_payment(payment_id) for payment_id in payment_ids]
+                pago_resp = await asyncio.gather(*pago_task)
+                id_map = {
+                    item["order_id"]: item["main_id"] for item in shipping_rows
+                }
+                payment_row_list = []
+                charge_row_list = []
+                for p in pago_resp:
+                    if isinstance(p, Exception):
+                        continue
+                    if isinstance(p, Dict):
+                        payment_row, charge_rows = self.parse_payment(p)
+                        payment_row["main_id"] = id_map.get(payment_row["order_id"])
+                        for charge_row in charge_rows:
+                            charge_row["main_id"] = id_map.get(charge_row["order_id"])
+                        payment_row_list.append(payment_row)
+                        charge_row_list.extend(charge_rows)
+                await DBManager.upsert("mercado_pago_payment", payment_row_list, conflict_cols=["main_id", "payment_id"])
+                await DBManager.upsert("mercado_order_charge", charge_row_list, conflict_cols=["main_id", "charge_id"])

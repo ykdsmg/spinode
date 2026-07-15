@@ -293,7 +293,7 @@ class Billing:
         await DBManager.upsert("billing_period", resp, ["seller_id","period_key","group_id"])
 
 
-    async def sync_bills(self, key: str):
+    async def sync_billing(self, key: str):
 
         for group in ["ML", "MP", "FLEX", "FULL"]:
 
