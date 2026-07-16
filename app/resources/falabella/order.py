@@ -1,9 +1,10 @@
 """Falabella 订单资源: 请求 / 解析 / 存储 / 同步"""
 import json
 from app.db.manager import DBManager
+from datetime import datetime, timedelta
 from app.platform.FalabellaShop import FalabellaShop
-from datetime import timedelta
 from typing import Dict
+from zoneinfo import ZoneInfo
 from app.core.converters import _sdec,_sstr
 
 class Order:
@@ -214,7 +215,14 @@ class Order:
 
                 return params_list
             else:
-                raise ValueError("at 和 to 必须同时提供")
+                tz_str = self.shop.timezone
+                tz_now = datetime.now(tz=ZoneInfo(tz_str))
+                at = tz_now - timedelta(minutes=30)
+                to = tz_now
+                params[gte_key] = at.strftime("%Y-%m-%dT%H:%M:%S")
+                params[lte_key] = to.strftime("%Y-%m-%dT%H:%M:%S")
+                params_list.append(params.copy())
+                return params_list
         else:
             return [params]
 
@@ -314,9 +322,9 @@ class Order:
 
         for params in self._build_search(search):
 
-            limit = 100
-            offset = 0
-            total = None
+            limit   = params.get("Limit", 100)
+            offset  = params.get("Offset", 0)
+            total   = None
 
             while total is None or offset < total:
                 params.update({"Limit": limit, "Offset": offset})

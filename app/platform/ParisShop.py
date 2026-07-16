@@ -17,30 +17,30 @@ class ParisShop:
 
     def __init__(
         self,
-        http: AsyncSession,
-        seller_id: str,
-        user_id: str | None = None,
-        api_key: str | None = None,
-        country: str | None = None,
-        shop_name: str | None = None,
-        shop_code: str | None = None,
-        time_zone: str | None = None,
+        http:           AsyncSession,
+        seller_id:      str,
+        user_id:        str | None = None,
+        api_key:        str | None = None,
+        country:        str | None = None,
+        shop_name:      str | None = None,
+        shop_code:      str | None = None,
+        time_zone:      str | None = None,
     ):
-        self.seller_id = seller_id
-        self.user_id = user_id
-        self.api_key = api_key
-        self.country = country
-        self.shop_name = shop_name
-        self.shop_code = shop_code
-        self.time_zone = time_zone
-        self.access_token = None
-        self.expires_in = 14400
-        self.get_time = None
-        self.base_url = "https://api-developers.ecomm.cencosud.com"
+        self.seller_id      = seller_id
+        self.user_id        = user_id
+        self.api_key        = api_key
+        self.country        = country
+        self.shop_name      = shop_name
+        self.shop_code      = shop_code
+        self.time_zone      = time_zone
+        self.access_token   = None
+        self.expires_in     = 14400
+        self.get_time       = None
+        self.base_url       = "https://api-developers.ecomm.cencosud.com"
 
-        self.http = http
+        self.http           = http
 
-        self._token_lock = asyncio.Lock()
+        self._token_lock    = asyncio.Lock()
 
     # ═══════════════════════════════════════════════
     #  Token 管理
@@ -154,18 +154,7 @@ class ParisShop:
             else:
                 resp = await _send()
             resp.raise_for_status()
-        except Exception as e:
-            logger.error(
-                "[%s] 请求失败 %s %s: %s",
-                self.seller_id, method, full_url, e,
-            )
-            return {}
-
-        try:
             return resp.json()
         except Exception as e:
-            logger.error(
-                "[%s] JSON 解析失败 %s %s: %s",
-                self.seller_id, method, full_url, e,
-            )
-            return {}
+            logger.error("[%s] 请求失败 %s: %s", self.seller_id, full_url, e)
+            raise

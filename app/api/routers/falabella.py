@@ -45,10 +45,11 @@ async def order_sync(
 ):
     """获取单个订单详情。"""
     search = searchmodel.model_dump(exclude_none=True)
+
     if seller_id and seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
 
-    targets = [shops.get(seller_id)] if seller_id else shops.values()
+    targets = [shops.get(seller_id)] if seller_id in shops else shops.values()
 
     for shop in targets:
         try:
@@ -206,7 +207,7 @@ async def product_search(
 async def product_sync(
     searchmodel: FLProductSearch = Depends(),
     shops=Depends(get_shops),
-    seller_id: str = Query(),
+    seller_id: str = Query(default=None),
 ):
     """获取单个订单详情。"""
     search = searchmodel.model_dump(exclude_none=True)
@@ -216,7 +217,7 @@ async def product_sync(
     shop = shops[seller_id]
 
     try:
-        resp = await Product(shop).sync_products(search)
+        count = await Product(shop).sync_products(search)
     except Exception as e:
         return ApiResponse(
             success=False,
@@ -226,7 +227,7 @@ async def product_sync(
     return ApiResponse(
         success=True,
         message="successfully sync falabella products",
-        data=resp,
+        data={"count": count},
     )
 
 
@@ -264,25 +265,26 @@ async def stocks_search(
 async def stocks_sync(
     searchmodel: FLStockSearch = Depends(),
     shops=Depends(get_shops),
-    seller_id: str = Query(),
+    seller_id: str = Query(default=None),
 ):
     """获取单个订单详情。"""
     search = searchmodel.model_dump(exclude_none=True)
-    if seller_id not in shops:
+
+    if seller_id and seller_id not in shops:
         raise HTTPException(status_code=404, detail="shop not found")
 
-    shop = shops[seller_id]
+    targets = [shops.get(seller_id)] if seller_id in shops else shops.values()
 
-    try:
-        resp = await Stock(shop).sync_stocks(search)
-    except Exception as e:
-        return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
-        )
+    for shop in targets:
+        try:
+            await Stock(shop).sync_stocks(search)
+        except Exception as e:
+            return ApiResponse(
+                success=False,
+                message=f"type: {type(e).__name__}, error: {str(e)}",
+            )
 
     return ApiResponse(
         success=True,
         message="successfully sync falabella product stock",
-        data=resp,
     )

@@ -505,8 +505,8 @@ async def get_inventories(inventory_id: str, shops = Depends(get_shops), seller_
         data=resp,
     )
 
-@router.get("/mercado/stock/sync/user_product", response_model=ApiResponse)
-async def sync_stock(shops = Depends(get_shops), seller_id: int = Query()):
+@router.get("/mercado/user_product/stocks/sync", response_model=ApiResponse)
+async def sync_stock(shops = Depends(get_shops), seller_id: int = Query(default=None)):
     """获取支付详情 → 解析 → 存储。"""
 
     targets = [shops.get(seller_id)] if seller_id else shops.values()
@@ -578,7 +578,7 @@ async def get_variation(item_id: str, variation_id: str, shops = Depends(get_sho
     )
 
 @router.get("/mercado/shops/product/sync/", response_model=ApiResponse)
-async def sync_product(shops = Depends(get_shops), seller_id: int = Query()):
+async def sync_product(shops = Depends(get_shops), seller_id: int = Query(default=None)):
     """获取支付详情 → 解析 → 存储。"""
 
     targets = [shops.get(seller_id)] if seller_id else shops.values()
@@ -664,7 +664,7 @@ async def get_Billing(
 @router.get("/mercado/shops/Periods/billing/sync/", response_model=ApiResponse)
 async def sync_billing(
     shops                = Depends(get_shops),
-    seller_id:       int = Query(),
+    seller_id:       int = Query(default=None),
     key:             str = Query(),
 ):
     """获取支付详情 → 解析 → 存储。"""
@@ -688,7 +688,7 @@ async def sync_billing(
 @router.get("/mercado/shops/billing/Periods/sync/", response_model=ApiResponse)
 async def sync_periods(
     shops          = Depends(get_shops),
-    seller_id: int = Query(),
+    seller_id: int = Query(default=None),
 ):
     """获取支付详情 → 解析 → 存储。"""
 

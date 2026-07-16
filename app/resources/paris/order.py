@@ -222,14 +222,15 @@ class Order:
 
     async def sync(self, search: Dict):
 
-        params_list = Order._build_params_(search)
+        params_list = Order._build_params(search)
 
         for params in params_list:
-            limit = 100
-            offset = 0
-            total = None
+            limit   = params.get("limit", 100)
+            offset  = params.get("offset", 0)
+            total   = None
             while total is None or offset < total:
-                params.update(limit=limit, offset=offset)
+
+                params.update({"limit": limit, "offset": offset})
 
                 resp = await self.shop.request(
                     method="GET",
@@ -253,7 +254,7 @@ class Order:
 
     async def search(self, search: Dict):
 
-        params = Order._build_params_(search)[0]
+        params = Order._build_param(search)
 
         resp = await self.shop.request(
             method="GET",
@@ -265,7 +266,7 @@ class Order:
 
 
     @staticmethod
-    def _build_params_(search: Dict) -> List:
+    def _build_params(search: Dict) -> List:
 
         datatype = search.get("datatype")
         at = search.get("at")
@@ -304,3 +305,30 @@ class Order:
                 raise ValueError("at 和 to 必须同时提供")
         else:
             return [params]
+
+    @staticmethod
+    def _build_param(search: Dict) -> Dict:
+
+        datatype = search.get("datatype")
+
+        at = search.get("at")
+        to = search.get("to")
+
+        param = {k: v for k, v in search.items() if k not in ("at", "to", "datatype")}
+
+        date_fields = {
+            0: ("gteUpdatedAt", "lteUpdatedAt"),
+            1: ("gteCreatedAt", "lteCreatedAt"),
+            2: ("gteCreatedAtInOrigin", "lteCreatedAtInOrigin"),
+        }
+
+        if datatype not in date_fields:
+            raise ValueError(f"不支持的 datatype: {datatype}")
+
+        gte_key, lte_key = date_fields[datatype]
+
+        if at and to:
+            param[gte_key] = at.strftime("%Y-%m-%d")
+            param[lte_key] = to.strftime("%Y-%m-%d")
+
+        return param

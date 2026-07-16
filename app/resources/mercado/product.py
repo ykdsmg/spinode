@@ -53,7 +53,7 @@ class Product:
                 "expiration_time":                      _trim(body.get('expiration_time')),
                 "condition":                            body.get('condition'),
                 "permalink":                            body.get('permalink'),
-                "thumbnail_id":                         body.get('thumbnail_id'),
+                # "thumbnail_id":                         body.get('thumbnail_id'),
                 "thumbnail":                            body.get('thumbnail'),
                 "video_id":                             body.get('video_id'),
                 "descriptions":                         _lstr(body.get('descriptions')),
@@ -107,7 +107,7 @@ class Product:
                         curr_image = {
                             "seller_id":        seller_id,
                             "item_id":          _str(body.get('id')),
-                            "variation_id":     "",
+                            "variation_id":     _str(variation.get('id')),
                             "image_id":         image_id,
                             "url":              picture.get('url'),
                         }
@@ -132,7 +132,7 @@ class Product:
                     for attribute in attributes:
                         attribute_rows.append({
                             "seller_id":        seller_id,
-                            "item_id":          _str(item.get('id')),
+                            "item_id":          _str(body.get('id')),
                             "variation_id":     "",
                             "attribute_id":     attribute.get('id'),
                             "attribute_name":   attribute.get('name'),
@@ -161,7 +161,7 @@ class Product:
             for attribute in attributes + attribute_combinations:
                 v_row = {
                     "seller_id":                seller_id,
-                    "main_id":                  item.get('id'),
+                    "main_id":                  item.get('main_id'),
                     "item_id":                  item.get('item_id'),
                     "variation_id":             str(item.get('id')),
                     "attribute_id":             attribute.get('id'),
@@ -201,9 +201,9 @@ class Product:
     async def save_variation(self, data: List):
         if not data:
             return
-        if not isinstance(data, list):
+        if not isinstance(data, List):
             data = [data]
-        await DBManager.upsert("mercado_product_variation", data, ["main_id","variation_id"])
+        await DBManager.upsert("mercado_product_attribute", data, ["main_id","attribute_id"])
 
 
     async def get_product(self,ids: str):
@@ -275,7 +275,6 @@ class Product:
             item_str = _lstr(item)
             if item_str:
                 tasks.append(self.get_product(item_str))
-        await asyncio.gather(*tasks)
 
         products = []
         if tasks:
@@ -283,7 +282,7 @@ class Product:
             for result in results:
                 if isinstance(result, Exception):
                     continue
-                if isinstance(result, Dict):
+                if isinstance(result, List):
                     products.extend(result)
         parsed = self.parse_product(products)
         await self.save_product(parsed)
@@ -293,12 +292,11 @@ class Product:
 
         seller_id = self.shop.seller_id
 
-        v_ids = await DBManager.select("SELECT id,item_id,variation_id FROM mercado_product WHERE seller_id = % AND variation_id <> ''", [seller_id])
+        v_ids = await DBManager.select("SELECT id,item_id,variation_id FROM mercado_product WHERE seller_id = %s AND variation_id <> ''", [seller_id])
 
         tasks = []
         for v_id in v_ids:
             tasks.append(self.get_variation(v_id['item_id'], v_id['variation_id']))
-        await asyncio.gather(*tasks)
 
         variations = []
         if tasks:

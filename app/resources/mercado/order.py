@@ -172,7 +172,7 @@ class Order:
                 atm_transfer_reference = payment.get("atm_transfer_reference") or {}
                 payment_row = {
                     "payment_id":                               payment.get("id"),
-                    "order_id":                                 payment.get("order_id"),
+                    "order_id":                                 str(payment.get("order_id")),
                     "payer_id":                                 payment.get("payer_id"),
                     "site_id":                                  payment.get("site_id"),
                     "currency_id":                              payment.get("currency_id"),
@@ -529,15 +529,18 @@ class Order:
         payment_rows    = data.get("payment_rows") or []
 
         await DBManager.upsert("mercado_order", order_rows, ["seller_id","order_id"])
-        placeholders = ','.join(['%s'] * len(order_rows))
 
-        rows = await DBManager.select(f"SELECT id as main_id,order_id,shipping_id FROM mercado_order WHERE order_id IN ({placeholders}) and seller_id = {self.shop.seller_id}")
+        order_ids = [row['order_id'] for row in order_rows]
+        placeholders = ','.join(['%s'] * len(order_ids))
+
+        rows = await DBManager.select(f"SELECT id as main_id,order_id,shipping_id FROM mercado_order WHERE order_id IN ({placeholders}) and seller_id = {self.shop.seller_id}", order_ids)
         id_map = {
             item['order_id']:item['main_id'] for item in rows
         }
 
         for item in item_rows:
             item['main_id'] = id_map.get(item['order_id'])
+
         for payment in payment_rows:
             payment['main_id'] = id_map.get(payment['order_id'])
 
@@ -677,9 +680,6 @@ class Order:
 
         params_list = Order._build_params_(search)
 
-        seller_id = self.shop.seller_id
-
-
         for params in params_list:
 
             limit   = params.get("limit", 50)
@@ -761,7 +761,7 @@ class Order:
                     if isinstance(resp, Dict):
                         discount_parsed = self.parse_discount(resp)
                         for row in discount_parsed:
-                            row.update({**item, "seller_id": seller_id})
+                            row.update(item)
                         discount_parsed_list.extend(discount_parsed)
 
                 await DBManager.upsert("mercado_order_discount", discount_parsed_list, conflict_cols=["main_id"])
@@ -785,4 +785,4 @@ class Order:
                         payment_row_list.append(payment_row)
                         charge_row_list.extend(charge_rows)
                 await DBManager.upsert("mercado_pago_payment", payment_row_list, conflict_cols=["main_id", "payment_id"])
-                await DBManager.upsert("mercado_order_charge", charge_row_list, conflict_cols=["main_id", "charge_id"])
+                await DBManager.upsert("mercado_pago_payment_charge", charge_row_list, conflict_cols=["main_id", "charge_id"])

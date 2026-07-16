@@ -21,26 +21,26 @@ class FalabellaShop:
 
     def __init__(
         self,
-        seller_id: str,
-        user_id: str,
-        api_key: str,
-        business_unit: str,
-        shop_name: str,
-        shop_names: str,
-        http: requests.Session,
-        integration_type: str = "PROPIA",
-        timezone: str | None = None,
+        seller_id:          str,
+        user_id:            str,
+        api_key:            str,
+        business_unit:      str,
+        shop_name:          str,
+        shop_names:         str,
+        http:               requests.Session,
+        timezone:           str,
+        integration_type:   str = "PROPIA",
     ):
-        self.seller_id = seller_id
-        self.user_id = user_id
-        self.api_key = api_key
-        self.business_unit = business_unit
-        self.shop_name = shop_name
-        self.shop_names = shop_names
-        self.http = http
-        self.integration_type = integration_type or "PROPIA"
-        self.timezone = timezone
-        self.base_url = "https://sellercenter-api.falabella.com/"
+        self.seller_id          = seller_id
+        self.user_id            = user_id
+        self.api_key            = api_key
+        self.business_unit      = business_unit
+        self.shop_name          = shop_name
+        self.shop_names         = shop_names
+        self.http               = http
+        self.integration_type   = integration_type or "PROPIA"
+        self.timezone           = timezone
+        self.base_url           = "https://sellercenter-api.falabella.com/"
 
     # ═══════════════════════════════════════════════
     #  签名
@@ -125,22 +125,8 @@ class FalabellaShop:
                 params      = params,
                 # verify      = False,
             )
-            if resp:
-                resp.raise_for_status()
-            else:
-                raise ValueError("响应为空")
-        except Exception as e:
-            logger.error(
-                "[%s] 请求失败 %s: %s",
-                self.seller_id, action, e,
-            )
-            return {}
-
-        try:
+            resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            logger.error(
-                "[%s] JSON 解析失败 %s: %s",
-                self.seller_id, action, e,
-            )
-            return {}
+            logger.error("[%s] 请求失败 %s: %s", self.seller_id, action, e)
+            raise

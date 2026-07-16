@@ -49,8 +49,8 @@ class FLProductSearch(BaseModel):
 class FLStockSearch(BaseModel):
     """stock"""
 
-    Limit:              int | None = None
-    Offset:             int | None = None
+    Limit:              int | None = 1000
+    Offset:             int | None = 0
     SellerSku:          str | None = None
     FacilityId:         str | None = None
     SellerWarehouseId:  str | None = None
@@ -88,8 +88,7 @@ class PROrderSearch(BaseModel):
 
     orderNumber:        str | None = None
     subOrderNumber:     str | None = None
-    sellerId:           str | None = None
-    datatype:           int | None = None
+    datatype:           int | None = 0
     at:                 datetime | None = None
     to:                 datetime | None = None
     customerDocument:   str | None = None
@@ -97,5 +96,14 @@ class PROrderSearch(BaseModel):
     itemStatus:         list[str] | None = None
     orderByDispatchDate:str | None = None
     facilityConfigId:   int | None = None
-    limit:              int | None = None
-    offset:             int | None = None
+    limit:              int | None = 100
+    offset:             int | None = 0
+
+    @model_validator(mode='after')
+    def set_default_dates(self):
+        now = datetime.now(tz=timezone.utc)
+        if self.at is None:
+            self.at = now - timedelta(days=1)
+        if self.to is None:
+            self.to = now
+        return self

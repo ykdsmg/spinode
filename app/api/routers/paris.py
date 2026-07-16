@@ -36,24 +36,33 @@ def get_shops(request: Request):
 # ═════════════════════════════════════════════════════════
 
 
-@router.get("/paris/shop/order/sync", response_model=ApiResponse)
+@router.get("/paris/shop/orders/sync", response_model=ApiResponse)
 async def order_sync(
-    shops=Depends(get_shops),
-    searchmodel: PROrderSearch = Query({}, description="商品搜索参数"),
+    seller_id: str | None = Query(default=None),
+    shops = Depends(get_shops),
+    searchmodel: PROrderSearch = Depends(),
 ):
     """同步订单"""
     search = searchmodel.model_dump(exclude_none=True)
 
-    for shop in shops.values():
-            try:
-                await Order(shop).sync(search)
-            except Exception as e:
-                return ApiResponse(
-                    success=False,
-                    message=f"type: {type(e).__name__}, error: {str(e)}",
-                )
+    if seller_id and seller_id not in shops:
+        raise HTTPException(status_code=404, detail="shop not found")
 
-    return ApiResponse(success=True, message="sync paris orders done")
+    targets = [shops.get(seller_id)] if seller_id in shops else shops.values()
+
+    for shop in targets:
+        try:
+            await Order(shop).sync(search)
+        except Exception as e:
+            return ApiResponse(
+                success=False,
+                message=f"type: {type(e).__name__}, error: {str(e)}",
+            )
+
+    return ApiResponse(
+        success=True,
+        message="sync paris orders done"
+    )
 
 
 
@@ -61,7 +70,7 @@ async def order_sync(
 async def order_search(
     seller_id: str = Path(description="SELLER ID 必填"),
     shops: dict[str, ParisShop] = Depends(get_shops),
-    searchmodel: PROrderSearch = Query({}, description="订单搜索参数"),
+    searchmodel: PROrderSearch = Depends(),
 ):
     """
     查询并保存指定店铺的订单数据

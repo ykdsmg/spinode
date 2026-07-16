@@ -159,10 +159,11 @@ class Product:
 
     async def sync_products(self, search: Dict):
         """全量同步商品 (自动翻页)。返回同步总数。"""
-        limit = search.get("Limit", 1000)
-        offset = search.get("Offset", 0)
-        count = None
-        while count is None or offset < count:
+
+        limit   = search.get("Limit", 1000)
+        offset  = search.get("Offset", 0)
+        count   = None
+        while count is None or offset <= count:
             search.update({"Limit": limit, "Offset": offset})
 
             resp = await self.get_products(search)
@@ -172,7 +173,8 @@ class Product:
 
             count += len(resp.get("SuccessResponse",{}).get("Body",{}).get("Products",{}).get("Product"))
 
-            if not resp:
-                continue
-            else:
-                await self.save(self.parse(resp))
+            offset += limit
+
+            await self.save(self.parse(resp))
+
+        return count

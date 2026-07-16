@@ -26,41 +26,39 @@ class MercadoShop:
 
     def __init__(
         self,
-        http: AsyncSession,
-        app_id: str | None = None,
-        secret: str | None = None,
-        user_id: str | None = None,
-        seller_id: str | None = None,
-        shop_name: str | None = None,
-        shop_names: str | None = None,
-        business_unit: str | None = None,
-        timezone: str | None = None,
-        access_token: str | None = None,
-        refresh_token: str | None = None,
-        get_time: datetime | None = None,
-        expires_in: int = 21600,
+        http:           AsyncSession,
+        app_id:         str | None = None,
+        secret:         str | None = None,
+        user_id:        str | None = None,
+        seller_id:      str | None = None,
+        shop_name:      str | None = None,
+        shop_names:     str | None = None,
+        business_unit:  str | None = None,
+        timezone:       str | None = None,
+        access_token:   str | None = None,
+        refresh_token:  str | None = None,
+        get_time:       datetime | None = None,
+        expires_in:     int = 21600,
     ) -> None:
-        self.app_id = app_id
-        self.secret = secret
-        self.user_id = user_id
-        self.seller_id = seller_id
-        self.shop_name = shop_name
-        self.shop_names = shop_names
-        self.business_unit = business_unit
-        self.timezone = timezone
-        self.base_url = "https://api.mercadolibre.com"
-        self.token_url = "https://api.mercadolibre.com/oauth/token"
-
+        self.app_id         = app_id
+        self.secret         = secret
+        self.user_id        = user_id
+        self.seller_id      = seller_id
+        self.shop_name      = shop_name
+        self.shop_names     = shop_names
+        self.business_unit  = business_unit
+        self.timezone       = timezone
+        self.base_url       = "https://api.mercadolibre.com"
+        self.token_url      = "https://api.mercadolibre.com/oauth/token"
         # Token
-        self.access_token = access_token
-        self.refresh_token = refresh_token
-        self.expires_in = expires_in
-        self.get_time = get_time or datetime(1970, 1, 1)
+        self.access_token   = access_token
+        self.refresh_token  = refresh_token
+        self.expires_in     = expires_in
+        self.get_time       = get_time or datetime(1970, 1, 1)
 
-        self.http = http
-
+        self.http           = http
         # 并发安全
-        self._token_lock = asyncio.Lock()
+        self._token_lock    = asyncio.Lock()
 
     # ═══════════════════════════════════════════════
     #  Token 管理
@@ -83,7 +81,7 @@ class MercadoShop:
         async with self._token_lock:
             if not self._should_refresh:          # double-check
                 return
-            # await self._refresh_token()
+            await self._refresh_token()
 
     async def _refresh_token(self):
         """使用全局 curl_cffi session 异步刷新 OAuth Token 并写 DB。"""
@@ -101,17 +99,17 @@ class MercadoShop:
 
         try:
             resp = await self.http.post(
-                self.token_url, headers=headers, data=data, verify=False,
+                self.token_url, headers=headers, data=data
             )
             if resp.status_code != 200:
                 body = resp.text
                 raise RuntimeError(f"刷新 Token 失败: {resp.status_code} {body}")
             req = resp.json()
 
-            self.access_token = req["access_token"]
-            self.refresh_token = req["refresh_token"]
-            self.expires_in = req["expires_in"]
-            self.get_time = datetime.now()
+            self.access_token    = req["access_token"]
+            self.refresh_token   = req["refresh_token"]
+            self.expires_in      = req["expires_in"]
+            self.get_time        = datetime.now()
             logger.info("[%s] 刷新 Token 成功", self.seller_id)
 
             # 持久化：旧 token 置无效 → 新 token 写入
@@ -205,18 +203,7 @@ class MercadoShop:
             else:
                 resp = await _send()
             resp.raise_for_status()
-        except Exception as e:
-            logger.error(
-                "[%s] 请求失败 %s %s: %s",
-                self.seller_id, method, full_url, e,
-            )
-            return {}
-
-        try:
             return resp.json()
         except Exception as e:
-            logger.error(
-                "[%s] JSON 解析失败 %s %s: %s",
-                self.seller_id, method, full_url, e,
-            )
-            return {}
+            logger.error("[%s] 请求失败 %s: %s", self.seller_id, full_url, e)
+            raise
