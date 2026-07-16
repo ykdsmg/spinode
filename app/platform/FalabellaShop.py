@@ -127,6 +127,32 @@ class FalabellaShop:
             )
             resp.raise_for_status()
             return resp.json()
+        except requests.exceptions.HTTPError as e:
+            # HTTP 状态码错误 (4xx/5xx)
+            status = e.response.status_code if e.response else "N/A"
+            logger.error(
+                "[%s] HTTP错误 %s %s -> %s",
+                self.seller_id, method, action, status
+            )
+            raise
+        except requests.exceptions.ConnectionError as e:
+            # 网络连接错误
+            logger.error(
+                "[%s] 连接失败 %s %s: %s",
+                self.seller_id, method, action, e
+            )
+            raise
+        except requests.exceptions.Timeout:
+            # 请求超时
+            logger.error(
+                "[%s] 请求超时 %s %s (%ds)",
+                self.seller_id, method, action, timeout
+            )
+            raise
         except Exception as e:
-            logger.error("[%s] 请求失败 %s: %s", self.seller_id, action, e)
+            # 其他异常（JSON解析错误等）
+            logger.error(
+                "[%s] 请求异常 %s %s: %s",
+                self.seller_id, method, action, e
+            )
             raise

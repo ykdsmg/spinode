@@ -1,4 +1,5 @@
 import asyncio
+from curl_cffi.requests.exceptions import HTTPError
 from curl_cffi.requests.session import HttpMethod, AsyncSession
 from aiolimiter import AsyncLimiter
 from datetime import datetime, timedelta
@@ -155,6 +156,18 @@ class ParisShop:
                 resp = await _send()
             resp.raise_for_status()
             return resp.json()
+        except HTTPError as e:
+                # HTTP 状态码错误 (4xx/5xx)
+                status = e.response.status_code if e.response else "N/A"
+                logger.error(
+                    "[%s] HTTP错误 %s %s -> %s",
+                    self.seller_id, method, full_url, status
+                )
+                raise
         except Exception as e:
-            logger.error("[%s] 请求失败 %s: %s", self.seller_id, full_url, e)
+            # 网络错误、JSON解析错误等
+            logger.error(
+                "[%s] 请求异常 %s %s: %s",
+                self.seller_id, method, full_url, e
+            )
             raise
