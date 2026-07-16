@@ -7,7 +7,7 @@ from contextlib         import asynccontextmanager
 from app.config         import load_paris_shop, load_falabella_shop, load_mercado_shop
 from app.core.logging   import get_logger,setup_logging
 from app.db.pool        import pool
-from curl_cffi.requests import AsyncSession, Session, RetryStrategy
+from curl_cffi.requests import AsyncSession, RetryStrategy
 
 from app.api.routers.falabella  import router as fl_router
 from app.api.routers.mercado    import router as ml_router

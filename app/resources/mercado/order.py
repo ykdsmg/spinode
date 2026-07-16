@@ -725,7 +725,7 @@ class Order:
                     task_ment.append(self.get_shipment(shipping_id))
                     task_sla.append(self.get_shipment_sla(shipping_id))
 
-                resp_ment = await asyncio.gather(*task_ment)
+                resp_ment = await asyncio.gather(*task_ment, return_exceptions=True)
                 shipment_parsed_list = []
                 lead_time_parsed_list = []
                 for item, resp in zip(shipping_rows, resp_ment):
@@ -741,7 +741,7 @@ class Order:
                 await DBManager.upsert("mercado_order_shipment", shipment_parsed_list, conflict_cols=["main_id"])
                 await DBManager.upsert("mercado_shipment_lead", lead_time_parsed_list, conflict_cols=["main_id"])
 
-                resp_sla = await asyncio.gather(*task_sla)
+                resp_sla = await asyncio.gather(*task_sla, return_exceptions=True)
                 shipmentsla_parsed_list = []
                 for item, resp in zip(shipment_parsed_list, resp_sla):
                     if isinstance(resp, Exception):
@@ -753,7 +753,7 @@ class Order:
 
                 await DBManager.upsert("mercado_shipment_lead", shipmentsla_parsed_list, conflict_cols=["main_id"])
 
-                resp_discount = await asyncio.gather(*task_discount)
+                resp_discount = await asyncio.gather(*task_discount, return_exceptions=True)
                 discount_parsed_list = []
                 for item, resp in zip(shipping_rows, resp_discount):
                     if isinstance(resp, Exception):
@@ -768,7 +768,7 @@ class Order:
 
                 payment_ids = [item.get("payment_id") for item in parsed.get("payment_rows") or []]
                 pago_task = [self.get_payment(payment_id) for payment_id in payment_ids]
-                pago_resp = await asyncio.gather(*pago_task)
+                pago_resp = await asyncio.gather(*pago_task, return_exceptions=True)
                 id_map = {
                     item["order_id"]: item["main_id"] for item in shipping_rows
                 }
