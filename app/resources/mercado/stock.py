@@ -85,9 +85,12 @@ class Stock:
 
         if tasks:
             stock_rows = []
-            resps = await asyncio.gather(*tasks)
+            resps = await asyncio.gather(*tasks, return_exceptions=True)
             for resp in resps:
                 if isinstance(resp, Exception):
                     continue
-                stock_rows.append(self.parsed_stock(resp))
+                if not isinstance(resp, dict):
+                    continue
+                parsed = self.parsed_stock(resp)
+                stock_rows.append(parsed)
             await DBManager.upsert("mercado_product_stock", stock_rows, ["seller_id","user_product_id"])
