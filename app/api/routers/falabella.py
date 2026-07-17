@@ -210,24 +210,22 @@ async def product_sync(
     seller_id: str = Query(default=None),
 ):
     """获取单个订单详情。"""
+    targets = [shops.get(seller_id)] if seller_id in shops else shops.values()
+
     search = searchmodel.model_dump(exclude_none=True)
-    if seller_id not in shops:
-        raise HTTPException(status_code=404, detail="shop not found")
 
-    shop = shops[seller_id]
-
-    try:
-        count = await Product(shop).sync_products(search)
-    except Exception as e:
-        return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
-        )
+    for shop in targets:
+        try:
+            await Product(shop).sync_products(search)
+        except Exception as e:
+            return ApiResponse(
+                success=False,
+                message=f"type: {type(e).__name__}, error: {str(e)}",
+            )
 
     return ApiResponse(
         success=True,
         message="successfully sync falabella products",
-        data={"count": count},
     )
 
 

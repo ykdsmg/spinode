@@ -176,5 +176,3 @@ class Product:
             offset += limit
 
             await self.save(self.parse(resp))
-
-        return count
