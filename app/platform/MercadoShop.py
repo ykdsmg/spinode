@@ -97,14 +97,18 @@ class MercadoShop:
             "refresh_token": self.refresh_token,
         }
         old_refresh = self.refresh_token
+        resp = None
 
         try:
+            # ── 1. 发送 HTTP 请求 ──────────────────────────
             resp = await self.http.post(
                 self.token_url, headers=headers, data=data
             )
             if resp.status_code != 200:
                 body = resp.text
                 raise RuntimeError(f"刷新 Token 失败: {resp.status_code} {body}")
+
+            # ── 2. 解析 JSON 响应 ──────────────────────────
             req = resp.json()
 
             self.access_token    = req["access_token"]
@@ -113,17 +117,31 @@ class MercadoShop:
             self.get_time        = datetime.now()
             logger.info("[%s] 刷新 Token 成功", self.seller_id)
 
-            # 持久化：旧 token 置无效 → 新 token 写入
-            await DBManager.execute(
-                "UPDATE mercado_token SET state = 0 WHERE user_id = %s AND refresh_token = %s",
-                (self.user_id, old_refresh),
-            )
+            # ── 3. 持久化到 DB ────────────────────────────
             req["GetTime"] = self.get_time
             req["state"] = 1
             await DBManager.upsert("mercado_token", req, ["user_id", "refresh_token"])
+            
+            await DBManager.execute(
+                "UPDATE mercado_token SET state = 0 WHERE user_id = %s AND refresh_token = %s",
+                (self.seller_id, old_refresh),
+            )
 
         except Exception as e:
-            logger.error("[%s] 刷新 Token 失败: %s", self.seller_id, e)
+            if resp is not None:
+                try:
+                    resp_body = resp.text
+                except Exception:
+                    resp_body = "<无法读取响应体>"
+                logger.error(
+                    "[%s] 刷新 Token 失败: %s | HTTP状态码: %s | 响应体: %s",
+                    self.seller_id, e, resp.status_code, resp_body,
+                )
+            else:
+                logger.error(
+                    "[%s] 刷新 Token 请求异常 (未获得响应): %s",
+                    self.seller_id, e,
+                )
 
     # ═══════════════════════════════════════════════
     #  Headers
