@@ -206,13 +206,17 @@ class MercadoShop:
             resp.raise_for_status()
             return resp.json()
         except HTTPError as e:
-                # HTTP 状态码错误 (4xx/5xx)
-                status = e.response.status_code if e.response else "N/A"
-                logger.error(
-                    "[%s] HTTP错误 %s %s -> %s",
-                    self.seller_id, method, full_url, status
-                )
+            # HTTP 状态码错误 (4xx/5xx)
+            status = e.response.status_code if e.response else "N/A"
+            # ── 404 不记日志，但仍抛出异常 ──────────────
+            if status == 404:
                 raise
+
+            logger.error(
+                "[%s] HTTP错误 %s %s -> %s",
+                self.seller_id, method, full_url, status
+            )
+            raise
         except Exception as e:
             # 网络错误、JSON解析错误等
             logger.error(
