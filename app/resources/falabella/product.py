@@ -33,8 +33,8 @@ class Product:
                 seller_sku      = Product.get("SellerSku")
                 shop_sku        = Product.get("ShopSku")
 
-                Images          = Product.get("Images",{}).get("Image") or []
-                BusinessUnit    = Product.get("BusinessUnits",{}).get("BusinessUnit") or {}
+                Images          = (Product.get("Images") or {}).get("Image") or []
+                BusinessUnit    = (Product.get("BusinessUnits") or {}).get("BusinessUnit") or {}
                 ProductData     = Product.get("ProductData") or {}
                 pro_info = {
                     "SellerSku":        seller_sku,
@@ -175,4 +175,6 @@ class Product:
 
             offset += limit
 
-            await self.save(self.parse(resp))
+            parsed = self.parse(resp)
+
+            await self.save(parsed)
