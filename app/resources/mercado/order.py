@@ -710,22 +710,11 @@ class Order:
                 parsed = self.parse_order(resp)
                 shipping_rows = await self.save_order(parsed)
 
+                order_id_list      = [item['order_id'] for item in shipping_rows if item['order_id']]
+                shipment_id_list   = [item['shipping_id'] for item in shipping_rows if item['shipping_id']]
 
-                if not shipping_rows:
-                    continue
 
-                task_ment = []
-                task_sla  = []
-                task_discount = []
-
-                for item in shipping_rows:
-                    shipping_id = item.pop('shipping_id')
-                    order_id    = item['order_id']
-                    task_discount.append(self.get_discount(order_id))
-                    task_ment.append(self.get_shipment(shipping_id))
-                    task_sla.append(self.get_shipment_sla(shipping_id))
-
-                resp_ment = await asyncio.gather(*task_ment, return_exceptions=True)
+                resp_ment = await asyncio.gather(*[self.get_shipment(id) for id in shipment_id_list], return_exceptions=True)
                 shipment_parsed_list = []
                 lead_time_parsed_list = []
                 for item, resp in zip(shipping_rows, resp_ment):
@@ -741,7 +730,7 @@ class Order:
                 await DBManager.upsert("mercado_order_shipment", shipment_parsed_list, conflict_cols=["main_id"])
                 await DBManager.upsert("mercado_shipment_lead", lead_time_parsed_list, conflict_cols=["main_id"])
 
-                resp_sla = await asyncio.gather(*task_sla, return_exceptions=True)
+                resp_sla = await asyncio.gather(*[self.get_shipment_sla(id) for id in shipment_id_list], return_exceptions=True)
                 shipmentsla_parsed_list = []
                 for item, resp in zip(shipment_parsed_list, resp_sla):
                     if isinstance(resp, Exception):
@@ -753,7 +742,7 @@ class Order:
 
                 await DBManager.upsert("mercado_shipment_lead", shipmentsla_parsed_list, conflict_cols=["main_id"])
 
-                resp_discount = await asyncio.gather(*task_discount, return_exceptions=True)
+                resp_discount = await asyncio.gather(*[self.get_discount(id) for id in order_id_list], return_exceptions=True)
                 discount_parsed_list = []
                 for item, resp in zip(shipping_rows, resp_discount):
                     if isinstance(resp, Exception):

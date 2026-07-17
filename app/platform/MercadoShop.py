@@ -121,7 +121,7 @@ class MercadoShop:
             req["GetTime"] = self.get_time
             req["state"] = 1
             await DBManager.upsert("mercado_token", req, ["user_id", "refresh_token"])
-            
+
             await DBManager.execute(
                 "UPDATE mercado_token SET state = 0 WHERE user_id = %s AND refresh_token = %s",
                 (self.seller_id, old_refresh),
