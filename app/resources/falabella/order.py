@@ -217,7 +217,7 @@ class Order:
             else:
                 tz_str = self.shop.timezone
                 tz_now = datetime.now(tz=ZoneInfo(tz_str))
-                at = tz_now - timedelta(minutes=30)
+                at = tz_now - timedelta(hours=1)
                 to = tz_now
                 params[gte_key] = at.strftime("%Y-%m-%dT%H:%M:%S")
                 params[lte_key] = to.strftime("%Y-%m-%dT%H:%M:%S")

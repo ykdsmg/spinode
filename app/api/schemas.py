@@ -77,7 +77,7 @@ class MLOrderSearch(BaseModel):
             self.datatype = 0
         now = datetime.now(tz=timezone.utc)
         if self.at is None:
-            self.at = now - timedelta(minutes=30)
+            self.at = now - timedelta(hours=1)
         if self.to is None:
             self.to = now
         return self
