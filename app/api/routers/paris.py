@@ -55,13 +55,13 @@ async def order_sync(
             await Order(shop).sync(search)
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync orders failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="sync paris orders done"
+        code=0,
+        message="sync orders success",
     )
 
 
@@ -85,12 +85,12 @@ async def order_search(
         resp = await Order(shop).search(search)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get orders failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="search and save orders done",
+        code=0,
+        message="get orders success",
         data=resp,
     )

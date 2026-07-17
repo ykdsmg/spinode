@@ -2,6 +2,8 @@
 FastAPI 应用主文件。
 """
 
+import time
+
 from fastapi            import FastAPI
 from contextlib         import asynccontextmanager
 from app.config         import load_paris_shop, load_falabella_shop, load_mercado_shop
@@ -9,9 +11,12 @@ from app.core.logging   import get_logger,setup_logging
 from app.db.pool        import pool
 from curl_cffi.requests import AsyncSession, RetryStrategy
 
-from app.api.routers.falabella  import router as fl_router
-from app.api.routers.mercado    import router as ml_router
-from app.api.routers.paris      import router as ps_router
+from starlette.requests import Request
+
+from app.api.schemas           import _request_start
+from app.api.routers.falabella import router as fl_router
+from app.api.routers.mercado   import router as ml_router
+from app.api.routers.paris     import router as ps_router
 
 import requests
 logger = get_logger(__name__)
@@ -82,6 +87,15 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+
+# ── 接口耗时中间件 ──────────────────────────────────
+@app.middleware("http")
+async def timing(request: Request, call_next):
+    """记录每个请求的开始时间，elapsed 由 ApiResponse 自动计算。"""
+    _request_start.set(time.time())
+    return await call_next(request)
+
 
 # ── 注册路由 ─────────────────────────────────────────
 app.include_router(fl_router, tags=["Falabella"])

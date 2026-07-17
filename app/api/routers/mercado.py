@@ -72,11 +72,14 @@ async def advertise_sync(
             await Advertise(shop).sync_advertisers(PRODUCT_ID)
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync advertisers failed: {type(e).__name__}: {str(e)}",
             )
 
-    return ApiResponse(success=True, message="sync mercado shop's advertisers done")
+    return ApiResponse(
+        code=0,
+        message="sync advertisers success",
+    )
 
 @router.get("/mercado/ads/adgroups/sync", response_model=ApiResponse)
 async def adgroups_sync(
@@ -93,13 +96,13 @@ async def adgroups_sync(
             await Advertise(shop).sync_adgroups()
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync adgroups failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="successfully get Mercado adgroups",
+        code=0,
+        message="sync adgroups success",
     )
 
 @router.get("/mercado/ads/adgroups/details/sync", response_model=ApiResponse)
@@ -119,13 +122,13 @@ async def adgroups_details_sync(
             await Advertise(shop).sync_adgroup_details(data_at, data_to)
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync adgroup details failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="successfully sync Mercado adgroups details",
+        code=0,
+        message="sync adgroup details success",
     )
 
 @router.get("/mercado/ads/advertisers/search", response_model=ApiResponse)
@@ -143,13 +146,13 @@ async def advertise_search(
         resp = await Advertise(shop).get_advertisers(product_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get advertisers failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get Mercado advertisers",
+        code=0,
+        message="get advertisers success",
         data=resp,
     )
 
@@ -173,13 +176,13 @@ async def adgroups_search(
         resp = await Advertise(shop).get_adgroups(advertiser_site_id, advertiser_id, limit, offset, data_at, data_to)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get adgroups failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get Mercado adgroups",
+        code=0,
+        message="get adgroups success",
         data=resp,
     )
 
@@ -201,13 +204,13 @@ async def adgroups_details_search(
         resp = await Advertise(shop).get_adgroup_details(advertiser_site_id, ad_group_id, data_at, data_to)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get adgroup details failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get Mercado adgroup_details",
+        code=0,
+        message="get adgroup details success",
         data=resp,
     )
 
@@ -232,13 +235,13 @@ async def pack_get(
         resp = await Order(shop).get_pack(pack_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get pack failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado pack",
+        code=0,
+        message="get pack success",
         data=resp,
     )
 
@@ -264,11 +267,14 @@ async def order_sync(
             await Order(shop).sync_order(search_dict)
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync orders failed: {type(e).__name__}: {str(e)}",
             )
 
-    return ApiResponse(success=True, message="sync mercado orders done")
+    return ApiResponse(
+        code=0,
+        message="sync orders success",
+    )
 
 @router.get("/mercado/orders/search", response_model=ApiResponse)
 async def order_search(
@@ -290,13 +296,13 @@ async def order_search(
         resp = await Order(shop).search_order(search_dict)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get orders failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado orders",
+        code=0,
+        message="get orders success",
         data=resp,
     )
 
@@ -317,13 +323,13 @@ async def order_get(
         resp = await Order(shop).get_order(order_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get order failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado order",
+        code=0,
+        message="get order success",
         data=resp,
     )
 
@@ -344,13 +350,13 @@ async def shipment_get(shipment_id: str, shops = Depends(get_shops), seller_id: 
         resp = await Order(shop).get_shipment(shipment_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get shipment failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado shipment",
+        code=0,
+        message="get shipment success",
         data=resp,
     )
 
@@ -368,13 +374,13 @@ async def shipment_history_get(shipment_id: str, shops = Depends(get_shops), sel
         resp = await Order(shop).get_shipment_history(shipment_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get shipment history failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado shipment history",
+        code=0,
+        message="get shipment history success",
         data=resp,
     )
 
@@ -392,13 +398,13 @@ async def shipment_sla_get(shipment_id: str, shops = Depends(get_shops), seller_
         resp = await Order(shop).get_shipment_sla(shipment_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get shipment sla failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado shipment sla",
+        code=0,
+        message="get shipment sla success",
         data=resp,
     )
 
@@ -420,13 +426,13 @@ async def payment_get(payment_id: str, shops = Depends(get_shops), seller_id: in
         resp = await Order(shop).get_payment(payment_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get payment failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado payment",
+        code=0,
+        message="get payment success",
         data=resp,
     )
 
@@ -445,13 +451,13 @@ async def discount_get(order_id: str, shops = Depends(get_shops), seller_id: int
 
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get discount failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado discount",
+        code=0,
+        message="get discount success",
         data=resp,
     )
 
@@ -472,13 +478,13 @@ async def get_mercado_stock(user_product_id: str, shops = Depends(get_shops), se
         resp = await Stock(shop).get_stock(user_product_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get stock failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado stock",
+        code=0,
+        message="get stock success",
         data=resp,
     )
 
@@ -495,13 +501,13 @@ async def get_inventories(inventory_id: str, shops = Depends(get_shops), seller_
         resp = await Stock(shop).get_fulfillment_stock(inventory_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get fulfillment stock failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado fulfillment stock",
+        code=0,
+        message="get fulfillment stock success",
         data=resp,
     )
 
@@ -518,13 +524,13 @@ async def sync_stock(shops = Depends(get_shops), seller_id: int = Query(default=
             await Stock(shop).sync_stock(stock_limit)
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync stock failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado stock",
+        code=0,
+        message="sync stock success",
     )
 
 # ═════════════════════════════════════════════════════════
@@ -544,13 +550,13 @@ async def get_product(item_id: str, shops = Depends(get_shops), seller_id: int =
         resp = await Product(shop).get_product(item_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get product failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado product",
+        code=0,
+        message="get product success",
         data=resp,
     )
 
@@ -567,13 +573,13 @@ async def get_variation(item_id: str, variation_id: str, shops = Depends(get_sho
         resp = await Product(shop).get_variation(item_id, variation_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get variation failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado variation",
+        code=0,
+        message="get variation success",
         data=resp,
     )
 
@@ -589,13 +595,13 @@ async def sync_product(shops = Depends(get_shops), seller_id: int = Query(defaul
             await Product(shop).sync_variation()
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync products failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="successfully sync mercado product",
+        code=0,
+        message="sync products success",
     )
 
 # ═════════════════════════════════════════════════════════
@@ -620,13 +626,13 @@ async def get_Periods(
         resp = await Billing(shop).Periods(group=group, document_type=document_type)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get billing periods failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado billing periods",
+        code=0,
+        message="get billing periods success",
         data=resp,
     )
 
@@ -651,13 +657,13 @@ async def get_Billing(
         resp = await Billing(shop).Billing(key=key, group=group, document_type=document_type, limit=limit, from_id=from_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get billing failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get mercado billing",
+        code=0,
+        message="get billing success",
         data=resp,
     )
 
@@ -676,13 +682,13 @@ async def sync_billing(
             await Billing(shop).sync_billing(key = key)
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync billing failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="successfully sync mercado billing",
+        code=0,
+        message="sync billing success",
     )
 
 @router.get("/mercado/shops/billing/Periods/sync/", response_model=ApiResponse)
@@ -699,11 +705,11 @@ async def sync_periods(
             await Billing(shop).sync_periods()
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync billing periods failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="successfully sync mercado billing periods",
+        code=0,
+        message="sync billing periods success",
     )

@@ -1,8 +1,22 @@
 """FastAPI 统一请求/响应 Pydantic 模型"""
 
+import time, contextvars
 from datetime import datetime, timezone, timedelta
 
 from pydantic import BaseModel, Field, model_validator
+
+# ── 请求耗时 ──────────────────────────────────────────
+# contextvars：每个请求独立存储，协程安全
+_request_start: contextvars.ContextVar[float] = contextvars.ContextVar("request_start")
+
+
+def _compute_elapsed() -> float:
+    """计算从中间件记录的开始时间到现在的耗时。"""
+    start = _request_start.get(None)
+    if start is None:
+        return 0.0
+    return round(time.time() - start, 4)
+
 
 # ── 通用响应 ──────────────────────────────────────────
 
@@ -10,10 +24,11 @@ from pydantic import BaseModel, Field, model_validator
 class ApiResponse(BaseModel):
     """标准 API 响应包装。"""
 
-    success:        bool = True
-    message:        str = ""
-    data:           dict | list | None = None
-    timestamp:      str = Field(default_factory=lambda: datetime.now().isoformat())
+    code:       int = 0             # 0=成功, 1=业务失败, -1=服务器异常
+    message:    str = ""
+    data:       dict | list | None = None
+    elapsed:    float = Field(default_factory=_compute_elapsed)  # 自动计算耗时
+    timestamp:  str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
 # ── falabella ──────────────────────────────────────────

@@ -56,13 +56,13 @@ async def order_sync(
             await Order(shop).sync_order(search)
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync orders failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="successfully sync falabella order done",
+        code=0,
+        message="sync orders success",
     )
 
 @router.get("/falabella/order/{order_id}", response_model=ApiResponse)
@@ -82,13 +82,13 @@ async def order_get(
         resp = await Order(shop).get_order(order_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get order failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get falabella order",
+        code=0,
+        message="get order success",
         data=resp,
     )
 
@@ -109,13 +109,13 @@ async def orders_search(
         resp = await Order(shop).get_orders(search)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get orders failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get falabella order",
+        code=0,
+        message="get orders success",
         data=resp,
     )
 
@@ -136,13 +136,13 @@ async def orderitem_get(
         resp = await Order(shop).get_item(order_id)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get order items failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get falabella order - item",
+        code=0,
+        message="get order items success",
         data=resp,
     )
 
@@ -162,13 +162,13 @@ async def orderitems_search(
         resp = await Order(shop).get_items(order_ids)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get order items failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get falabella order - items",
+        code=0,
+        message="get order items success",
         data=resp,
     )
 
@@ -192,13 +192,13 @@ async def product_search(
         resp = await Product(shop).get_products(search)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get products failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get falabella product",
+        code=0,
+        message="get products success",
         data=resp,
     )
 
@@ -219,13 +219,13 @@ async def product_sync(
             await Product(shop).sync_products(search)
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync products failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="successfully sync falabella products",
+        code=0,
+        message="sync products success",
     )
 
 
@@ -249,13 +249,13 @@ async def stocks_search(
         resp = await Stock(shop).get_stocks(search)
     except Exception as e:
         return ApiResponse(
-            success=False,
-            message=f"type: {type(e).__name__}, error: {str(e)}",
+            code=1,
+            message=f"get stocks failed: {type(e).__name__}: {str(e)}",
         )
 
     return ApiResponse(
-        success=True,
-        message="successfully get falabella product stock",
+        code=0,
+        message="get stocks success",
         data=resp,
     )
 
@@ -278,11 +278,11 @@ async def stocks_sync(
             await Stock(shop).sync_stocks(search)
         except Exception as e:
             return ApiResponse(
-                success=False,
-                message=f"type: {type(e).__name__}, error: {str(e)}",
+                code=1,
+                message=f"sync stocks failed: {type(e).__name__}: {str(e)}",
             )
 
     return ApiResponse(
-        success=True,
-        message="successfully sync falabella product stock",
+        code=0,
+        message="sync stocks success",
     )
