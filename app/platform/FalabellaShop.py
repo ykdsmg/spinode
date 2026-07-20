@@ -2,28 +2,52 @@
 
 - 同步请求，全局 Session 由外部（FastAPI lifespan）注入。
 - 每次请求 HMAC-SHA256 签名，无需 token。
-- 应用层 backon 重试：网络错误 + 指定状态码自动重试（最多 5 次，指数退避）。
+- tenacity 重试：网络错误 + 指定状态码自动重试（最多 5 次，指数退避）。
 """
 import requests
 import hashlib
 import hmac
 import urllib.parse
-import backon
 from datetime import datetime, timezone
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception,
+)
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# ═══════════════════════════════════════════════
+#  重试配置（tenacity）
+# ═══════════════════════════════════════════════
+
+# 可重试的 HTTP 状态码
+_RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+def _should_retry(exc: BaseException) -> bool:
+    """网络错误始终重试；HTTP 错误仅在白名单状态码重试。"""
+    if isinstance(exc, requests.exceptions.HTTPError):
+        if exc.response is not None:
+            return exc.response.status_code in _RETRYABLE_STATUSES
+    return True
+
+_retry = retry(
+    retry   = retry_if_exception(_should_retry),
+    wait    = wait_exponential(multiplier=1, min=1, max=60),
+    stop    = stop_after_attempt(5),
+    reraise = True,
+)
 
 
 class FalabellaShop:
     """Falabella 店铺。
 
     - 签名算法: HMAC-SHA256 (Action + 公共参数排序 → 签名)。
-    - 应用层 backon 重试：网络错误 + 指定状态码自动重试（最多 5 次，指数退避）。
+    - tenacity 重试：网络错误 + 指定状态码 {429,500,502,503,504} 重试（最多 5 次）。
     """
-
-    # 可重试的 HTTP 状态码
-    _RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 
     def __init__(
         self,
@@ -104,11 +128,11 @@ class FalabellaShop:
     ) -> dict:
         """统一 HTTP 请求入口，自带签名。
 
-        应用层 backon 重试：网络错误 + 指定状态码 {429,500,502,503,504}
+        tenacity 重试：网络错误 + 指定状态码 {429,500,502,503,504}
         自动重试（最多 5 次，指数退避），其余错误直接抛出。
 
         工作流:
-            _build_params(action, params) → _build_headers() → backon.retry(HTTP 请求) → JSON 解析
+            _build_params(action, params) → _build_headers() → HTTP 请求 → JSON 解析
 
         Args:
             method:     HTTP 方法 (GET/POST/…)。
@@ -123,17 +147,8 @@ class FalabellaShop:
         req_params = self._build_params(action, params)
         headers    = self._build_headers()
 
-        # ── 2. 重试条件：网络错误 + 指定状态码 ──────────
-        retryable = self._RETRYABLE_STATUSES
-
-        def _giveup(exc: Exception) -> bool:
-            """非网络错误且非指定状态码 → 放弃重试。"""
-            if isinstance(exc, requests.exceptions.HTTPError):
-                if exc.response is not None:
-                    return exc.response.status_code not in retryable
-            return False  # 网络错误 → 继续重试
-
-        # ── 3. 实际 HTTP 调用 ─────────────────────────
+        # ── 2. 发送请求（带重试） ────────────────────
+        @_retry
         def _call() -> dict:
             resp = self.http.request(
                 method      = method,
@@ -145,17 +160,9 @@ class FalabellaShop:
             resp.raise_for_status()
             return resp.json()
 
-        # ── 4. 执行（带重试） ─────────────────────────
         try:
-            return backon.retry(
-                _call,
-                backon.expo,
-                exception   = Exception,
-                max_tries   = 5,
-                giveup      = _giveup,
-            )
+            return _call()
         except requests.exceptions.HTTPError as e:
-            # HTTP 状态码错误 — 不可重试的已被 giveup 拦截
             status = e.response.status_code if e.response else "N/A"
             logger.error(
                 "[%s] HTTP错误 %s %s -> %s",
@@ -163,7 +170,6 @@ class FalabellaShop:
             )
             raise
         except Exception as e:
-            # 网络错误等 — 重试耗尽后仍失败
             logger.error(
                 "[%s] 请求异常 %s %s: %s",
                 self.seller_id, method, action, e

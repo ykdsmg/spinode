@@ -1,8 +1,19 @@
-import backon
+"""Paris 店铺（异步版）。
+
+- 全局 aiohttp ClientSession 由外部（FastAPI lifespan）注入。
+- 统一通过 request() 发送请求，自带 token 刷新 + 可选限流。
+- tenacity 重试：网络错误 + 指定状态码重试，每次尝试计入 AsyncLimiter。
+"""
 import asyncio
 from aiohttp        import ClientSession, ClientResponseError, ClientTimeout
 from aiolimiter     import AsyncLimiter
 from datetime       import datetime, timedelta
+from tenacity       import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception,
+)
 
 from app.core.logging import get_logger
 
@@ -10,23 +21,23 @@ logger = get_logger(__name__)
 
 
 # ═══════════════════════════════════════════════
-#  重试配置（backon）
+#  重试配置（tenacity）
 # ═══════════════════════════════════════════════
 
 # 可重试的 HTTP 状态码
 _RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 
-def _giveup(exc: Exception) -> bool:
-    """非网络错误且非指定状态码 → 放弃重试。"""
+def _should_retry(exc: BaseException) -> bool:
+    """网络错误始终重试；HTTP 错误仅在白名单状态码重试。"""
     if isinstance(exc, ClientResponseError):
-        return exc.status not in _RETRYABLE_STATUSES
-    return False  # 网络错误 → 继续重试
+        return exc.status in _RETRYABLE_STATUSES
+    return True
 
-_retry = backon.on_exception(
-    backon.expo,
-    exception   = Exception,
-    max_tries   = 5,
-    giveup      = _giveup,
+_retry = retry(
+    retry   = retry_if_exception(_should_retry),
+    wait    = wait_exponential(multiplier=1, min=1, max=60),
+    stop    = stop_after_attempt(5),
+    reraise = True,
 )
 
 
@@ -35,7 +46,7 @@ class ParisShop:
 
     - 全局 aiohttp ClientSession 由外部（FastAPI lifespan）注入。
     - 统一通过 request() 发送请求，自带 token 刷新 + 可选限流。
-    - 应用层 backon 重试：网络错误 + 指定状态码 {429,500,502,503,504} 重试（最多 5 次）。
+    - tenacity 重试：网络错误 + 指定状态码 {429,500,502,503,504} 重试（最多 5 次），每次尝试计入限流。
     """
 
     def __init__(
@@ -111,8 +122,6 @@ class ParisShop:
     #  统一请求入口
     # ═══════════════════════════════════════════════
 
-    # 非指定状态码不可重试，网络错误 + 指定状态码由 backon 自动重试
-
     async def request(
         self,
         method: str,
@@ -126,16 +135,16 @@ class ParisShop:
     ) -> dict:
         """统一 HTTP 请求入口。
 
-        应用层 backon 重试：网络错误 + 指定状态码 {429,500,502,503,504}
-        自动重试（最多 5 次，指数退避），其余错误直接抛出。
+        tenacity 重试：网络错误 + 指定状态码 {429,500,502,503,504}
+        自动重试（最多 5 次，指数退避），每次尝试计入 AsyncLimiter。
 
         工作流:
-            valid_token() → 合并 headers → AsyncLimiter（如有）→ HTTP 请求 → JSON 解析
+            valid_token() → 合并 headers → 重试循环 → AsyncLimiter（每次尝试）→ HTTP → JSON
 
         Args:
             method:   HTTP 方法 (GET/POST/…)。
             url:      请求路径（自动拼接 base_url）。
-            limiter:  可选 AsyncLimiter，有 QPM 需求的 Resource 传入。
+            limiter:  可选 AsyncLimiter，每次重试尝试都会消耗一个令牌。
             timeout:  单个 HTTP 请求超时（秒，默认 30）。
             headers:  额外请求头，与 shop 基础 headers 合并。
             params:   URL 查询参数字典。
@@ -158,9 +167,9 @@ class ParisShop:
         # ── 3. 拼接完整 URL ─────────────────────────
         full_url = f"{self.base_url}{url}"
 
-        # ── 4. 发送请求（带 backon 重试 + 可选限流） ──
-        @_retry
-        async def _send():
+        # ── 4. 发送请求（重试 + 限流：每次尝试独立计次）──
+        async def _do_request():
+            """单次 HTTP 调用（无重试、无限流）。"""
             t = ClientTimeout(total=timeout)
             async with self.http.request(
                 method      = method,
@@ -168,19 +177,24 @@ class ParisShop:
                 timeout     = t,
                 headers     = merged_headers,
                 params      = params,
+                ssl         = False,
                 **kwargs,
             ) as resp:
                 resp.raise_for_status()
                 return await resp.json()
 
-        try:
+        @_retry
+        async def _attempt():
+            """带重试的单次尝试 — limiter 在每次重试中生效。"""
             if limiter:
                 async with limiter:
-                    return await _send()
+                    return await _do_request()
             else:
-                return await _send()
+                return await _do_request()
+
+        try:
+            return await _attempt()
         except ClientResponseError as e:
-            # HTTP 状态码错误 (4xx/5xx) — 5xx 已被 backon 重试过
             status = e.status
             logger.error(
                 "[%s] HTTP错误 %s %s -> %s",
@@ -188,7 +202,6 @@ class ParisShop:
             )
             raise
         except Exception as e:
-            # 网络错误、JSON解析错误等 — 已被 backon 重试过
             logger.error(
                 "[%s] 请求异常 %s %s: %s",
                 self.seller_id, method, full_url, e
