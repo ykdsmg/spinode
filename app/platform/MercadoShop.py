@@ -1,16 +1,17 @@
 """Mercado 店铺（异步版）。
 
-- 全局 AsyncSession 由外部（FastAPI lifespan）注入，已内置 RetryStrategy 传输层重试。
-- OAuth2 Token 过期自动刷新（线程安全），刷新也用 curl_cffi。
-- 统一通过 request() 发送请求，调用方无需关心重试。
+- 全局 aiohttp ClientSession 由外部（FastAPI lifespan）注入。
+- OAuth2 Token 过期自动刷新（线程安全）。
+- 统一通过 request() 发送请求，应用层 backon 重试：网络错误 + 指定状态码重试。
 """
+import backon
 import asyncio
-from aiolimiter import AsyncLimiter
-from curl_cffi.requests.exceptions import HTTPError
-from curl_cffi.requests.session import HttpMethod, AsyncSession
-from datetime import datetime, timedelta
-from app.core.logging import get_logger
-from app.db.manager import DBManager
+from aiolimiter     import AsyncLimiter
+from aiohttp        import ClientSession, ClientResponseError, ClientTimeout
+from datetime       import datetime, timedelta
+
+from app.core.logging       import get_logger
+from app.db.manager         import DBManager
 
 logger = get_logger(__name__)
 
@@ -18,16 +19,37 @@ logger = get_logger(__name__)
 _REFRESH_LEAD_MINUTES = 30
 
 
+# ═══════════════════════════════════════════════
+#  重试配置（backon）
+# ═══════════════════════════════════════════════
+
+# 可重试的 HTTP 状态码
+_RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+def _giveup(exc: Exception) -> bool:
+    """非网络错误且非指定状态码 → 放弃重试。"""
+    if isinstance(exc, ClientResponseError):
+        return exc.status not in _RETRYABLE_STATUSES
+    return False  # 网络错误 → 继续重试
+
+_retry = backon.on_exception(
+    backon.expo,
+    exception   = Exception,
+    max_tries   = 5,
+    giveup      = _giveup,
+)
+
+
 class MercadoShop:
     """Mercado 店铺。
 
     - OAuth2 认证，refresh_token 过期后自动续期并写 DB。
-    - 全局 session 已内置重试，连接/超时异常由 session 透明处理。
+    - 应用层 backon 重试：网络错误 + 指定状态码 {429,500,502,503,504} 重试（最多 5 次）。
     """
 
     def __init__(
         self,
-        http:           AsyncSession,
+        http:           ClientSession,
         app_id:         str | None = None,
         secret:         str | None = None,
         user_id:        str | None = None,
@@ -85,7 +107,7 @@ class MercadoShop:
             await self._refresh_token()
 
     async def _refresh_token(self):
-        """使用全局 curl_cffi session 异步刷新 OAuth Token 并写 DB。"""
+        """使用全局 aiohttp session 异步刷新 OAuth Token 并写 DB。"""
         headers = {
             "accept": "application/json",
             "content-type": "application/x-www-form-urlencoded",
@@ -101,15 +123,15 @@ class MercadoShop:
 
         try:
             # ── 1. 发送 HTTP 请求 ──────────────────────────
-            resp = await self.http.post(
+            async with self.http.post(
                 self.token_url, headers=headers, data=data
-            )
-            if resp.status_code != 200:
-                body = resp.text
-                raise RuntimeError(f"刷新 Token 失败: {resp.status_code} {body}")
+            ) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise RuntimeError(f"刷新 Token 失败: {resp.status} {body}")
 
-            # ── 2. 解析 JSON 响应 ──────────────────────────
-            req = resp.json()
+                # ── 2. 解析 JSON 响应 ──────────────────────────
+                req = await resp.json()
 
             self.access_token    = req["access_token"]
             self.refresh_token   = req["refresh_token"]
@@ -130,12 +152,12 @@ class MercadoShop:
         except Exception as e:
             if resp is not None:
                 try:
-                    resp_body = resp.text
+                    resp_body = await resp.text()
                 except Exception:
                     resp_body = "<无法读取响应体>"
                 logger.error(
                     "[%s] 刷新 Token 失败: %s | HTTP状态码: %s | 响应体: %s",
-                    self.seller_id, e, resp.status_code, resp_body,
+                    self.seller_id, e, resp.status, resp_body,
                 )
             else:
                 logger.error(
@@ -154,11 +176,11 @@ class MercadoShop:
     #  统一请求入口
     # ═══════════════════════════════════════════════
 
-    # curl_cffi 视为不可重试的状态码（服务端错误，session 传输层已做重试）
+    # 非指定状态码不可重试，网络错误 + 指定状态码由 backon 自动重试
 
     async def request(
         self,
-        method: HttpMethod,
+        method: str,
         url: str,
         *,
         limiter: AsyncLimiter | None = None,
@@ -170,8 +192,8 @@ class MercadoShop:
     ) -> dict:
         """统一 HTTP 请求入口。
 
-        传输层重试由 curl_cffi AsyncSession 内置的 RetryStrategy 承担（连接超时/DNS/SSL 等）。
-        本方法不再叠加应用层重试，仅做 token 刷新、限流控制与服务端错误记录。
+        应用层 backon 重试：网络错误 + 指定状态码 {429,500,502,503,504}
+        自动重试（最多 5 次，指数退避），其余错误直接抛出。
 
         工作流:
             valid_token() → 合并 headers → AsyncLimiter（如有）→ HTTP 请求 → JSON 解析
@@ -180,11 +202,11 @@ class MercadoShop:
             method:     HTTP 方法 (GET/POST/…)。
             url:        请求路径（自动拼接 base_url 或 other_url）。
             limiter:    可选 AsyncLimiter，有 QPM 需求的 Resource 传入。
-            timeout:    单个 HTTP 请求超时（秒，默认 60）。
+            timeout:    单个 HTTP 请求超时（秒，默认 50）。
             other_url:  可选替换 base_url（如 MercadoPago）。
             headers:    额外请求头，与 shop 基础 headers 合并。
             params:     URL 查询参数字典。
-            **kwargs:   透传给 curl_cffi session.request()（如 json / data 等）。
+            **kwargs:   透传给 aiohttp session.request()（如 json / data 等）。
 
         Returns:
             dict — JSON 响应体，失败时返回空 dict。
@@ -203,29 +225,30 @@ class MercadoShop:
         else:
             full_url = f"{self.base_url}{url}"
 
-        # ── 4. 发送请求（带可选限流） ──────────────
+        # ── 4. 发送请求（带 backon 重试 + 可选限流） ──
+        @_retry
         async def _send():
-            return await self.http.request(
+            t = ClientTimeout(total=timeout)
+            async with self.http.request(
                 method      = method,
                 url         = full_url,
-                timeout     = timeout,
+                timeout     = t,
                 headers     = merged_headers,
                 params      = params,
-                # verify      = False,
                 **kwargs,
-            )
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.json()
 
         try:
             if limiter:
                 async with limiter:
-                    resp = await _send()
+                    return await _send()
             else:
-                resp = await _send()
-            resp.raise_for_status()
-            return resp.json()
-        except HTTPError as e:
-            # HTTP 状态码错误 (4xx/5xx)
-            status = e.response.status_code if e.response else "N/A"
+                return await _send()
+        except ClientResponseError as e:
+            # HTTP 状态码错误 (4xx/5xx) — 5xx 已被 backon 重试过
+            status = e.status
             # ── 404 不记日志，但仍抛出异常 ──────────────
             if status == 404:
                 raise
@@ -236,7 +259,7 @@ class MercadoShop:
             )
             raise
         except Exception as e:
-            # 网络错误、JSON解析错误等
+            # 网络错误、JSON解析错误等 — 已被 backon 重试过
             logger.error(
                 "[%s] 请求异常 %s %s: %s",
                 self.seller_id, method, full_url, e

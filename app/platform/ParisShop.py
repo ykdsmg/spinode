@@ -1,24 +1,46 @@
+import backon
 import asyncio
-from curl_cffi.requests.exceptions import HTTPError
-from curl_cffi.requests.session import HttpMethod, AsyncSession
-from aiolimiter import AsyncLimiter
-from datetime import datetime, timedelta
+from aiohttp        import ClientSession, ClientResponseError, ClientTimeout
+from aiolimiter     import AsyncLimiter
+from datetime       import datetime, timedelta
+
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
+# ═══════════════════════════════════════════════
+#  重试配置（backon）
+# ═══════════════════════════════════════════════
+
+# 可重试的 HTTP 状态码
+_RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+def _giveup(exc: Exception) -> bool:
+    """非网络错误且非指定状态码 → 放弃重试。"""
+    if isinstance(exc, ClientResponseError):
+        return exc.status not in _RETRYABLE_STATUSES
+    return False  # 网络错误 → 继续重试
+
+_retry = backon.on_exception(
+    backon.expo,
+    exception   = Exception,
+    max_tries   = 5,
+    giveup      = _giveup,
+)
+
+
 class ParisShop:
     """Paris 店铺。
 
-    - 全局 AsyncSession 由外部（FastAPI lifespan）注入，已内置 RetryStrategy 传输层重试。
+    - 全局 aiohttp ClientSession 由外部（FastAPI lifespan）注入。
     - 统一通过 request() 发送请求，自带 token 刷新 + 可选限流。
-    - 调用方无需关心重试，所有连接/超时异常由 session 层面自动处理。
+    - 应用层 backon 重试：网络错误 + 指定状态码 {429,500,502,503,504} 重试（最多 5 次）。
     """
 
     def __init__(
         self,
-        http:           AsyncSession,
+        http:           ClientSession,
         seller_id:      str,
         user_id:        str | None = None,
         api_key:        str | None = None,
@@ -73,15 +95,15 @@ class ParisShop:
             "Authorization": f"Bearer {self.api_key}",
         }
         try:
-            resp = await self.http.post(url, headers=headers, verify=False)
-            if resp.status_code == 200:
-                req = resp.json()
-                self.access_token = req["accessToken"]
-                self.get_time = datetime.now()
-                logger.info("[%s] 刷新 Token 成功", self.seller_id)
-            else:
-                body = resp.text
-                raise RuntimeError(f"刷新 Token 失败: {resp.status_code} {body}")
+            async with self.http.post(url, headers=headers, ssl=False) as resp:
+                if resp.status == 200:
+                    req = await resp.json()
+                    self.access_token = req["accessToken"]
+                    self.get_time = datetime.now()
+                    logger.info("[%s] 刷新 Token 成功", self.seller_id)
+                else:
+                    body = await resp.text()
+                    raise RuntimeError(f"刷新 Token 失败: {resp.status} {body}")
         except Exception as e:
             logger.error("[%s] 刷新 Token 失败: %s", self.seller_id, e)
 
@@ -89,11 +111,11 @@ class ParisShop:
     #  统一请求入口
     # ═══════════════════════════════════════════════
 
-    # curl_cffi 视为不可重试的状态码（服务端错误，session 传输层已做重试）
+    # 非指定状态码不可重试，网络错误 + 指定状态码由 backon 自动重试
 
     async def request(
         self,
-        method: HttpMethod,
+        method: str,
         url: str,
         *,
         limiter: AsyncLimiter | None = None,
@@ -104,8 +126,8 @@ class ParisShop:
     ) -> dict:
         """统一 HTTP 请求入口。
 
-        传输层重试由 curl_cffi AsyncSession 内置的 RetryStrategy 承担（连接超时/DNS/SSL 等）。
-        本方法不再叠加应用层重试，仅做 token 刷新、限流控制与服务端错误记录。
+        应用层 backon 重试：网络错误 + 指定状态码 {429,500,502,503,504}
+        自动重试（最多 5 次，指数退避），其余错误直接抛出。
 
         工作流:
             valid_token() → 合并 headers → AsyncLimiter（如有）→ HTTP 请求 → JSON 解析
@@ -117,7 +139,7 @@ class ParisShop:
             timeout:  单个 HTTP 请求超时（秒，默认 30）。
             headers:  额外请求头，与 shop 基础 headers 合并。
             params:   URL 查询参数字典。
-            **kwargs: 透传给 curl_cffi session.request()（如 json / data 等）。
+            **kwargs: 透传给 aiohttp session.request()（如 json / data 等）。
 
         Returns:
             dict — JSON 响应体，失败时返回空 dict。
@@ -136,36 +158,37 @@ class ParisShop:
         # ── 3. 拼接完整 URL ─────────────────────────
         full_url = f"{self.base_url}{url}"
 
-        # ── 4. 发送请求（带可选限流） ──────────────
+        # ── 4. 发送请求（带 backon 重试 + 可选限流） ──
+        @_retry
         async def _send():
-            return await self.http.request(
+            t = ClientTimeout(total=timeout)
+            async with self.http.request(
                 method      = method,
                 url         = full_url,
-                timeout     = timeout,
+                timeout     = t,
                 headers     = merged_headers,
                 params      = params,
-                verify      = False,
                 **kwargs,
-            )
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.json()
 
         try:
             if limiter:
                 async with limiter:
-                    resp = await _send()
+                    return await _send()
             else:
-                resp = await _send()
-            resp.raise_for_status()
-            return resp.json()
-        except HTTPError as e:
-                # HTTP 状态码错误 (4xx/5xx)
-                status = e.response.status_code if e.response else "N/A"
-                logger.error(
-                    "[%s] HTTP错误 %s %s -> %s",
-                    self.seller_id, method, full_url, status
-                )
-                raise
+                return await _send()
+        except ClientResponseError as e:
+            # HTTP 状态码错误 (4xx/5xx) — 5xx 已被 backon 重试过
+            status = e.status
+            logger.error(
+                "[%s] HTTP错误 %s %s -> %s",
+                self.seller_id, method, full_url, status
+            )
+            raise
         except Exception as e:
-            # 网络错误、JSON解析错误等
+            # 网络错误、JSON解析错误等 — 已被 backon 重试过
             logger.error(
                 "[%s] 请求异常 %s %s: %s",
                 self.seller_id, method, full_url, e

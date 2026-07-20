@@ -3,14 +3,13 @@ FastAPI 应用主文件。
 """
 
 import time
+import aiohttp
 
 from fastapi            import FastAPI
 from contextlib         import asynccontextmanager
 from app.config         import load_paris_shop, load_falabella_shop, load_mercado_shop
 from app.core.logging   import get_logger,setup_logging
 from app.db.pool        import pool
-from curl_cffi.requests import AsyncSession, RetryStrategy
-
 from starlette.requests import Request
 
 from app.api.schemas           import _request_start
@@ -22,11 +21,9 @@ import requests
 logger = get_logger(__name__)
 
 # 全局 session 配置
-_HTTP_MAX_CLIENTS   = 200            # 最大并发连接数
-_HTTP_TIMEOUT       = 60             # 默认超时（秒）
-_RETRY_COUNT        = 5              # 失败重试次数
-_RETRY_DELAY        = 1.0            # 重试初始延迟（秒）
-_RETRY_BACKOFF      = 'exponential'  # 重试退避策略
+_HTTP_MAX_CLIENTS       = 200        # 最大并发连接数
+_HTTP_LIMIT_PER_HOST    = 50         # 单主机最大并发连接数
+_HTTP_TIMEOUT           = 60         # 默认超时（秒）
 
 
 @asynccontextmanager
@@ -39,20 +36,19 @@ async def lifespan(app: FastAPI):
     await pool.create()
     logger.info("数据库连接池已就绪")
 
-    # 全局异步 HTTP Session（curl_cffi）
-    async_session = AsyncSession(
-        max_clients = _HTTP_MAX_CLIENTS,
-        timeout     = _HTTP_TIMEOUT,
-        retry       = RetryStrategy(
-            count   = _RETRY_COUNT,
-            delay   = _RETRY_DELAY,
-            jitter  = 0.5,
-            backoff = _RETRY_BACKOFF,
-        ),
+    # 全局异步 HTTP Session（aiohttp）
+    connector = aiohttp.TCPConnector(
+        limit           = _HTTP_MAX_CLIENTS,
+        limit_per_host  = _HTTP_LIMIT_PER_HOST,
     )
-    logger.info("异步 HTTP Session 已就绪 (max_clients=%s, retry=%s, timeout=%s)", _HTTP_MAX_CLIENTS, _RETRY_COUNT, _HTTP_TIMEOUT)
+    timeout = aiohttp.ClientTimeout(total=_HTTP_TIMEOUT)
+    async_session = aiohttp.ClientSession(
+        connector   = connector,
+        timeout     = timeout,
+    )
+    logger.info("异步 HTTP Session 已就绪 (max_clients=%s, timeout=%s)", _HTTP_MAX_CLIENTS, _HTTP_TIMEOUT)
 
-    # 全局同步 HTTP Session（curl_cffi）
+    # 全局同步 HTTP Session（requests）
     sync_session = requests.Session()
     logger.info("同步 HTTP Session 已就绪 (timeout=%s)", _HTTP_TIMEOUT)
 

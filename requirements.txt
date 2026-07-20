@@ -7,7 +7,10 @@ pydantic>=2.5.0
 
 # HTTP 客户端
 requests>=2.31.0
-curl_cffi>=0.5.10
+aiohttp>=3.9.0
+
+# 重试库
+backon>=0.2.0
 
 # 异步速率限制
 aiolimiter>=1.1.0

@@ -334,7 +334,7 @@ class Billing:
                     if curr_len < total - count:
                         err_count -=1
                         continue
-                # count += curr_len
+                count += curr_len
                 from_id = resp.get('last_id') or 0
 
                 if group == "ML":
