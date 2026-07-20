@@ -66,9 +66,9 @@ class Order:
                 data = [data]
             seller_id = self.shop.seller_id
             for Order in data:
-                AddressBilling          = {**(Order.get("AddressBilling") or {})}
-                AddressShipping         = {**(Order.get("AddressShipping") or {})}
-                ExtraBillingAttributes  = {**(Order.get("ExtraBillingAttributes") or {})}
+                AddressBilling          = Order.get("AddressBilling") or {}
+                AddressShipping         = Order.get("AddressShipping") or {}
+                ExtraBillingAttributes  = Order.get("ExtraBillingAttributes") or {}
                 ExtraAttributes         = {**json.loads(Order.get("ExtraAttributes") or "{}")}
 
                 OrderId                 = int(Order.get("OrderId") or 0)
@@ -173,11 +173,11 @@ class Order:
                 extrabillingattributes_list.append(extrabillingattributes_info)
                 extraattributes_list.append(extraattributes_info)
             return {
-                "order_rows": order_list,
-                "addressbilling_rows": addressbilling_list,
-                "addressshipping_rows": addressshipping_list,
-                "extrabillingattributes_rows": extrabillingattributes_list,
-                "extraattributes_rows": extraattributes_list,
+                "order_rows":                   order_list,
+                "addressbilling_rows":          addressbilling_list,
+                "addressshipping_rows":         addressshipping_list,
+                "extrabillingattributes_rows":  extrabillingattributes_list,
+                "extraattributes_rows":         extraattributes_list,
             }
 
     def _build_search(self, search: Dict):
@@ -280,34 +280,44 @@ class Order:
         id_map = {
             item["OrderId"]: item["ID"]
             for item in await DBManager.select(
-                f"SELECT ID,OrderId FROM falabella_orders WHERE SellerID = %s AND OrderID IN ({placeholders})",[self.shop.seller_id] + ids,
+                f"SELECT ID, OrderId FROM falabella_orders WHERE SellerId = %s AND OrderId IN ({placeholders})",
+                [self.shop.seller_id] + ids,
             )
         }
 
-        for item in addressbilling_info:
-            item["RBOrderId"] = id_map.get(item["OrderId"])
-            item.pop("OrderId")
+        # 过滤掉 id_map 中找不到的记录，同时移除 OrderId（子表用 RBOrderId）
+        addressbilling_info = [
+            {"RBOrderId": rb_id, **item}
+            for item in addressbilling_info
+            if (rb_id := id_map.get(item.pop("OrderId"))) is not None
+        ]
         await DBManager.upsert(
             "falabella_order_address_billing", addressbilling_info, ["RBOrderId"]
         )
 
-        for item in addressshipping_info:
-            item["RBOrderId"] = id_map.get(item["OrderId"])
-            item.pop("OrderId")
+        addressshipping_info = [
+            {"RBOrderId": rb_id, **item}
+            for item in addressshipping_info
+            if (rb_id := id_map.get(item.pop("OrderId"))) is not None
+        ]
         await DBManager.upsert(
             "falabella_order_address_shipping", addressshipping_info, ["RBOrderId"]
         )
 
-        for item in extrabillingattributes_info:
-            item["RBOrderId"] = id_map.get(item["OrderId"])
-            item.pop("OrderId")
+        extrabillingattributes_info = [
+            {"RBOrderId": rb_id, **item}
+            for item in extrabillingattributes_info
+            if (rb_id := id_map.get(item.pop("OrderId"))) is not None
+        ]
         await DBManager.upsert(
-            "falabella_order_extra_billing_attributes",extrabillingattributes_info,["RBOrderId"],
+            "falabella_order_extra_billing_attributes", extrabillingattributes_info, ["RBOrderId"],
         )
 
-        for item in extraattributes_info:
-            item["RBOrderId"] = id_map.get(item["OrderId"])
-            item.pop("OrderId")
+        extraattributes_info = [
+            {"RBOrderId": rb_id, **item}
+            for item in extraattributes_info
+            if (rb_id := id_map.get(item.pop("OrderId"))) is not None
+        ]
         await DBManager.upsert(
             "falabella_order_extra_attributes", extraattributes_info, ["RBOrderId"]
         )
