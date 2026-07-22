@@ -1,6 +1,7 @@
 """FastAPI 统一请求/响应 Pydantic 模型"""
 
-import time, contextvars
+import time
+import contextvars
 from datetime import datetime, timezone, timedelta
 
 from pydantic import BaseModel, Field, model_validator
@@ -119,6 +120,36 @@ class PROrderSearch(BaseModel):
         now = datetime.now(tz=timezone.utc)
         if self.at is None:
             self.at = now - timedelta(days=1)
+        if self.to is None:
+            self.to = now
+        return self
+
+
+# ── Ripley ──────────────────────────────────────────
+class RPOrderSearch(BaseModel):
+    """订单搜索参数。"""
+    max:                           int | None = 100
+    offset:                        int | None = 0
+    datatype:                      int | None = 0
+    at:                       datetime | None = None
+    to:                       datetime | None = None
+    order_ids:                     str | None = None
+    order_state_codes:             str | None = None
+    channel_codes:                 str | None = None
+    only_null_channel:            bool | None = None
+    customer_debited:             bool | None = None
+    payment_workflow:              str | None = None
+    has_incident:                 bool | None = None
+    fulfillment_center_code:       str | None = None
+    order_tax_mode:                str | None = None
+    order_references_for_customer: str | None = None
+    order_references_for_seller:   str | None = None
+
+    @model_validator(mode='after')
+    def set_default_dates(self):
+        now = datetime.now(tz=timezone.utc)
+        if self.at is None:
+            self.at = now - timedelta(hours=1)
         if self.to is None:
             self.to = now
         return self

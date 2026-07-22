@@ -26,3 +26,11 @@ async def load_paris_shop(session: ClientSession):
     shops = await DBManager.select("SELECT seller_id,api_key FROM shop_config_paris")
 
     return {shop['seller_id']: ParisShop(seller_id=shop['seller_id'], api_key=shop['api_key'], http=session) for shop in shops}
+
+
+async def load_ripley_shop(session: ClientSession):
+    from app.platform.RipleyShop import RipleyShop
+
+    shops = await DBManager.select("SELECT api_key,shop_id,shop_name,shop_code,country,time_zone FROM shop_config_ripley")
+
+    return {shop['shop_id']: RipleyShop(http=session, **shop) for shop in shops}
