@@ -36,7 +36,7 @@ def get_shops(request: Request):
 # ═════════════════════════════════════════════════════════
 
 
-@router.get("/paris/shop/orders/sync", response_model=ApiResponse)
+@router.get("/paris/orders/sync", response_model=ApiResponse)
 async def order_sync(
     seller_id: str | None = Query(default=None),
     shops = Depends(get_shops),
@@ -66,7 +66,7 @@ async def order_sync(
 
 
 
-@router.get("/paris/shop/{seller_id}/order/search",response_model=ApiResponse)
+@router.get("/paris/shop/{seller_id}/orders/search",response_model=ApiResponse)
 async def order_search(
     seller_id: str = Path(description="SELLER ID 必填"),
     shops: dict[str, ParisShop] = Depends(get_shops),
