@@ -272,7 +272,10 @@ class Order:
         refund_rows         = data.get("refund_rows") or []
 
         # ── order 主表 ────────────────────────────
-        await DBManager.upsert("ripley_order", order_rows, ["shop_id", "order_id"])
+        flag = await DBManager.upsert("ripley_order", order_rows, ["shop_id", "order_id"])
+
+        if flag is not None:
+            pass
 
         # ── 查回自增 id，供子表 main_id 外键 ──────
         order_ids = [r["order_id"] for r in order_rows]

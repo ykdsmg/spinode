@@ -182,7 +182,10 @@ class Product:
         picture_rows = data.get('picture_rows') or []
         attribute_rows = data.get('attribute_rows') or []
 
-        await DBManager.upsert("mercado_product", product_rows, ["seller_id","item_id","variation_id"])
+        flag = await DBManager.upsert("mercado_product", product_rows, ["seller_id","item_id","variation_id"])
+
+        if flag is not None:
+            pass
 
         id_map = {
             (item['item_id'],item['variation_id']): item['id']

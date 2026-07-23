@@ -528,7 +528,10 @@ class Order:
         item_rows       = data.get("item_rows") or []
         payment_rows    = data.get("payment_rows") or []
 
-        await DBManager.upsert("mercado_order", order_rows, ["seller_id","order_id"])
+        flag = await DBManager.upsert("mercado_order", order_rows, ["seller_id","order_id"])
+
+        if flag is not None:
+            pass
 
         order_ids = [row['order_id'] for row in order_rows]
         placeholders = ','.join(['%s'] * len(order_ids))

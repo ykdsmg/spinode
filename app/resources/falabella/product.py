@@ -107,9 +107,11 @@ class Product:
         bus_info = resp.get("bus_info") or []
         abt_info = resp.get("abt_info") or []
 
-        await DBManager.upsert(
+        flag = await DBManager.upsert(
             "falabella_product", pro_info, ["SellerSku", "ShopSku", "SellerId"]
         )
+        if flag is not None:
+            pass
 
         id_map = {
             (item["SellerSku"], str(item["ShopSku"])): item["ID"]

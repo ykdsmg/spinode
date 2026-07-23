@@ -273,7 +273,10 @@ class Order:
         extrabillingattributes_info = data.get("extrabillingattributes_rows") or []
         extraattributes_info        = data.get("extraattributes_rows") or []
 
-        await DBManager.upsert("falabella_orders", order_info, ["SellerId", "OrderId"])
+        flag = await DBManager.upsert("falabella_orders", order_info, ["SellerId", "OrderId"])
+
+        if flag is not None:
+            pass
 
         ids = [item["OrderId"] for item in order_info]
         placeholders = ",".join(["%s"] * len(ids))

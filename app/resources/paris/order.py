@@ -193,7 +193,10 @@ class Order:
 
         # order 表
 
-        await DBManager.upsert("paris_order", order_rows, ["sub_order_number"])
+        flag = await DBManager.upsert("paris_order", order_rows, ["sub_order_number"])
+
+        if flag is not None:
+            pass
 
         # 查回自增 id，供子表 main_id 外键
         order_numbers = [r["sub_order_number"] for r in order_rows]
