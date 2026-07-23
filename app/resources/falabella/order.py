@@ -289,38 +289,34 @@ class Order:
         }
 
         # 过滤掉 id_map 中找不到的记录，同时移除 OrderId（子表用 RBOrderId）
-        addressbilling_info = [
-            {"RBOrderId": rb_id, **item}
-            for item in addressbilling_info
-            if (rb_id := id_map.get(item.pop("OrderId"))) is not None
-        ]
+        for item in addressbilling_info:
+            item["RBOrderId"] = id_map.get(item["OrderId"])
+            item.pop("OrderId")
+
         await DBManager.upsert(
             "falabella_order_address_billing", addressbilling_info, ["RBOrderId"]
         )
 
-        addressshipping_info = [
-            {"RBOrderId": rb_id, **item}
-            for item in addressshipping_info
-            if (rb_id := id_map.get(item.pop("OrderId"))) is not None
-        ]
+        for item in addressshipping_info:
+            item["RBOrderId"] = id_map.get(item["OrderId"])
+            item.pop("OrderId")
+
         await DBManager.upsert(
             "falabella_order_address_shipping", addressshipping_info, ["RBOrderId"]
         )
 
-        extrabillingattributes_info = [
-            {"RBOrderId": rb_id, **item}
-            for item in extrabillingattributes_info
-            if (rb_id := id_map.get(item.pop("OrderId"))) is not None
-        ]
+        for item in extrabillingattributes_info:
+            item["RBOrderId"] = id_map.get(item["OrderId"])
+            item.pop("OrderId")
+
         await DBManager.upsert(
             "falabella_order_extra_billing_attributes", extrabillingattributes_info, ["RBOrderId"],
         )
 
-        extraattributes_info = [
-            {"RBOrderId": rb_id, **item}
-            for item in extraattributes_info
-            if (rb_id := id_map.get(item.pop("OrderId"))) is not None
-        ]
+        for item in extraattributes_info:
+            item["RBOrderId"] = id_map.get(item["OrderId"])
+            item.pop("OrderId")
+
         await DBManager.upsert(
             "falabella_order_extra_attributes", extraattributes_info, ["RBOrderId"]
         )
