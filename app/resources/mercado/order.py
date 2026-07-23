@@ -19,43 +19,40 @@ class Order:
     @staticmethod
     def _build_params_(search: Dict) -> List:
 
-        datatype = search.get("datatype")
+        datatype = search.get("datatype",0)
         at = search.get("at")
         to = search.get("to")
 
         params = {k: v for k, v in search.items() if k not in ("at", "to", "datatype")}
 
-        if datatype is not None:
+        params_list = []
 
-            params_list = []
+        date_fields = {
+            0: ("order.date_last_updated.from", "order.date_last_updated.to"),
+            1: ("order.date_created.from", "order.date_created.to"),
+            2: ("order.date_closed.from", "order.date_closed.to"),
+        }
 
-            date_fields = {
-                0: ("order.date_last_updated.from", "order.date_last_updated.to"),
-                1: ("order.date_created.from", "order.date_created.to"),
-                2: ("order.date_closed.from", "order.date_closed.to"),
-            }
+        if datatype not in date_fields:
+            raise ValueError(f"不支持的 datatype: {datatype}")
 
-            if datatype not in date_fields:
-                raise ValueError(f"不支持的 datatype: {datatype}")
+        gte_key, lte_key = date_fields[datatype]
 
-            gte_key, lte_key = date_fields[datatype]
+        if at and to:
+            current_at = at
+            while current_at < to:
+                current_to = current_at + timedelta(days=1)
+                if current_to > to:
+                    current_to = to
+                params[gte_key] = current_at.isoformat()
+                params[lte_key] = current_to.isoformat()
+                params_list.append(params.copy())
+                current_at += timedelta(days=1)
 
-            if at and to:
-                current_at = at
-                while current_at < to:
-                    current_to = current_at + timedelta(days=1)
-                    if current_to > to:
-                        current_to = to
-                    params[gte_key] = current_at.isoformat()
-                    params[lte_key] = current_to.isoformat()
-                    params_list.append(params.copy())
-                    current_at += timedelta(days=1)
-
-                return params_list
-            else:
-                raise ValueError("at 和 to 必须同时提供")
+            return params_list
         else:
-            return [params]
+            raise ValueError("at 和 to 必须同时提供")
+
 
 
     def parse_order(self, results: Dict):

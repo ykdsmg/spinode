@@ -74,23 +74,20 @@ class FLStockSearch(BaseModel):
 # ── Mercado ──────────────────────────────────────────
 class MLOrderSearch(BaseModel):
     """订单搜索参数。"""
-
-    datatype:  int | None = None
+    limit:     int | None = 50
+    offset:    int | None = 0
+    datatype:  int | None = 0
     at:   datetime | None = None
     to:   datetime | None = None
     sort:      str | None = None
     item:      str | None = None
     status:    str | None = None
     seller:    str | None = None
-    limit:     int | None = None
-    offset:    int | None = None
     tags:      str | None = None
     q:         str | None = None
 
     @model_validator(mode='after')
     def set_default_dates(self):
-        if self.datatype is None:
-            self.datatype = 0
         now = datetime.now(tz=timezone.utc)
         if self.at is None:
             self.at = now - timedelta(hours=1)
