@@ -12,7 +12,7 @@
 from fastapi import APIRouter, HTTPException, Query, Path, Request, Depends
 
 # basemodel
-from app.api.schemas import ApiResponse, RPOrderSearch
+from app.api.schemas import ApiResponse, RPOrderSearch, RPOrderSync
 
 # 资源
 from app.resources.ripley.order import Order
@@ -63,7 +63,7 @@ async def order_search(
 async def order_sync(
     shops                 = Depends(get_shops),
     shop_id:        int = Query(None, description="同步指定店铺, 默认None同步所有店铺"),
-    searchmodel: RPOrderSearch = Depends(),
+    searchmodel: RPOrderSync = Depends(),
 ):
     """全量同步订单: 按日期范围分页拉取 → 解析 → 存储订单/商品/支付 → 并发拉取货运详情。"""
 

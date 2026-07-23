@@ -13,7 +13,7 @@
 from fastapi import APIRouter, HTTPException, Query, Path, Request, Depends
 
 # basemodel
-from app.api.schemas import ApiResponse, PROrderSearch
+from app.api.schemas import ApiResponse, PROrderSearch, PROrderSync
 
 # 店铺
 from app.platform.ParisShop import ParisShop
@@ -40,7 +40,7 @@ def get_shops(request: Request):
 async def order_sync(
     seller_id: str | None = Query(default=None),
     shops = Depends(get_shops),
-    searchmodel: PROrderSearch = Depends(),
+    searchmodel: PROrderSync = Depends(),
 ):
     """同步订单"""
     search = searchmodel.model_dump(exclude_none=True)

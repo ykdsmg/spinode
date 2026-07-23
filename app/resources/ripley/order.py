@@ -247,12 +247,10 @@ class Order:
 
     async def search(self, search: Dict):
 
-        params = Order._paese_params(search)
-
         resp = await self.shop.request(
             method  = "GET",
             url     = "/api/orders",
-            params  = params,
+            params  = search,
         )
 
         return resp
@@ -378,34 +376,5 @@ class Order:
                 current_at = current_to
 
             return params_list
-        else:
-            raise ValueError("at 和 to 必须同时提供")
-
-
-    @staticmethod
-    def _paese_params(search: Dict) -> Dict:
-        """将搜索参数按日期范围拆分为多个分页请求的参数列表。"""
-
-        datatype = search.get("datatype")
-        at = search.get("at")
-        to = search.get("to")
-
-        params = {k: v for k, v in search.items() if k not in ("at", "to", "datatype")}
-
-        date_fields = {
-            0: ("start_update_date", "end_update_date"),
-            1: ("start_date", "end_date"),
-        }
-
-        if datatype not in date_fields:
-            raise ValueError(f"不支持的 datatype: {datatype}")
-
-        gte_key, lte_key = date_fields[datatype]
-
-        if at and to:
-
-            params[gte_key] = at.isoformat()
-            params[lte_key] = to.isoformat()
-            return params
         else:
             raise ValueError("at 和 to 必须同时提供")

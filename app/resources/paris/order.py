@@ -257,12 +257,10 @@ class Order:
 
     async def search(self, search: Dict):
 
-        params = Order._build_param(search)
-
         resp = await self.shop.request(
             method="GET",
             url="/v1/orders",
-            params=params,
+            params=search,
         )
 
         return resp
@@ -308,30 +306,3 @@ class Order:
                 raise ValueError("at 和 to 必须同时提供")
         else:
             return [params]
-
-    @staticmethod
-    def _build_param(search: Dict) -> Dict:
-
-        datatype = search.get("datatype")
-
-        at = search.get("at")
-        to = search.get("to")
-
-        param = {k: v for k, v in search.items() if k not in ("at", "to", "datatype")}
-
-        date_fields = {
-            0: ("gteUpdatedAt", "lteUpdatedAt"),
-            1: ("gteCreatedAt", "lteCreatedAt"),
-            2: ("gteCreatedAtInOrigin", "lteCreatedAtInOrigin"),
-        }
-
-        if datatype not in date_fields:
-            raise ValueError(f"不支持的 datatype: {datatype}")
-
-        gte_key, lte_key = date_fields[datatype]
-
-        if at and to:
-            param[gte_key] = at.strftime("%Y-%m-%d")
-            param[lte_key] = to.strftime("%Y-%m-%d")
-
-        return param

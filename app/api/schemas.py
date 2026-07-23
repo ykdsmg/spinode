@@ -99,21 +99,13 @@ class MLOrderSearch(BaseModel):
         return self
 
 # ── Paris ──────────────────────────────────────────
-class PROrderSearch(BaseModel):
-    """订单搜索参数。"""
-
-    orderNumber:        str | None = None
-    subOrderNumber:     str | None = None
+class PROrderSync(BaseModel):
+    """订单同步参数。"""
+    limit:              int | None = 100
+    offset:             int | None = 0
     datatype:           int | None = 0
     at:                 datetime | None = None
     to:                 datetime | None = None
-    customerDocument:   str | None = None
-    status:             int | None = None
-    itemStatus:         list[str] | None = None
-    orderByDispatchDate:str | None = None
-    facilityConfigId:   int | None = None
-    limit:              int | None = 100
-    offset:             int | None = 0
 
     @model_validator(mode='after')
     def set_default_dates(self):
@@ -124,15 +116,50 @@ class PROrderSearch(BaseModel):
             self.to = now
         return self
 
+class PROrderSearch(BaseModel):
+    """订单搜索参数。"""
+    limit:                  int | None = 100
+    offset:                 int | None = 0
+    gteUpdatedAt:           str | None = None  # utc
+    lteUpdatedAt:           str | None = None  # utc
+    gteCreatedAt:           str | None = None  # utc
+    lteCreatedAt:           str | None = None  # utc
+    gteCreatedAtInOrigin:   str | None = None  # utc
+    lteCreatedAtInOrigin:   str | None = None  # utc
+    orderNumber:            str | None = None
+    subOrderNumber:         str | None = None
+    customerDocument:       str | None = None
+    status:                 int | None = None
+    itemStatus:             list[str] | None = None
+    orderByDispatchDate:    str | None = None
+    facilityConfigId:       int | None = None
 
 # ── Ripley ──────────────────────────────────────────
-class RPOrderSearch(BaseModel):
-    """订单搜索参数。"""
+class RPOrderSync(BaseModel):
+    """订单tsbu参数。"""
     max:                           int | None = 100
     offset:                        int | None = 0
     datatype:                      int | None = 0
     at:                       datetime | None = None
     to:                       datetime | None = None
+
+    @model_validator(mode='after')
+    def set_default_dates(self):
+        now = datetime.now(tz=timezone.utc)
+        if self.at is None:
+            self.at = now - timedelta(hours=1)
+        if self.to is None:
+            self.to = now
+        return self
+
+class RPOrderSearch(BaseModel):
+    """订单搜索参数。"""
+    max:                           int | None = 100
+    offset:                        int | None = 0
+    start_update_date:             str | None = None  # utc
+    end_update_date:               str | None = None  # utc
+    start_date:                    str | None = None  # utc
+    end_date:                      str | None = None  # utc
     order_ids:                     str | None = None
     order_state_codes:             str | None = None
     channel_codes:                 str | None = None
@@ -145,6 +172,14 @@ class RPOrderSearch(BaseModel):
     order_references_for_customer: str | None = None
     order_references_for_seller:   str | None = None
 
+# ── walmart ──────────────────────────────────────────
+class WMOrderSync(BaseModel):
+    """订单搜索参数。"""
+    limit:              int | None = 200
+    datatype:           int | None = 0
+    at:            datetime | None = None
+    to:            datetime | None = None
+
     @model_validator(mode='after')
     def set_default_dates(self):
         now = datetime.now(tz=timezone.utc)
@@ -153,3 +188,23 @@ class RPOrderSearch(BaseModel):
         if self.to is None:
             self.to = now
         return self
+
+class WMOrderSearch(BaseModel):
+    """订单搜索参数。"""
+    limit:                  int | None = 200
+    lastModifiedStartDate:  str | None = None
+    lastModifiedEndDate:    str | None = None
+    createdStartDate:       str | None = None
+    createdEndDate:         str | None = None
+    fromExpectedShipDate:   str | None = None
+    toExpectedShipDate:     str | None = None
+    sku:                    str | None = None
+    customerOrderId:        str | None = None
+    purchaseOrderId:        str | None = None
+    status:                 str | None = None
+    productInfo:           bool | None = None
+    shipNodeType:           str | None = None
+    shippingProgramType:    str | None = None
+    replacementInfo:       bool | None = None
+    orderType:              str | None = None
+    incentiveInfo:         bool | None = None
