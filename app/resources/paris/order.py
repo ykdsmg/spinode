@@ -193,7 +193,7 @@ class Order:
 
         # order 表
 
-        flag = await DBManager.upsert("paris_order", order_rows, ["sub_order_number"])
+        flag = await DBManager.upsert("paris_order", order_rows, ["seller_id","sub_order_number"])
 
         if flag is not None:
             pass
