@@ -145,7 +145,7 @@ class Order:
                     "attributes":               _json(item.get("attributes")),
                     "quantity":                 order_item.get("quantity"),
                     "requested_quantity":       _json(order_item.get("requested_quantity")),
-                    "picked_quantity":          order_item.get("picked_quantity"),
+                    "picked_quantity":          _json(order_item.get("picked_quantity")),
                     "unit_price":               order_item.get("unit_price"),
                     "currency_id":              order_item.get("currency_id"),
                     "manufacturing_days":       order_item.get("manufacturing_days"),
