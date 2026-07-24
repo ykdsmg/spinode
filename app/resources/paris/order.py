@@ -217,9 +217,9 @@ class Order:
         if billing_address_rows:
             await DBManager.upsert("paris_order_address_billing", billing_address_rows, ["main_id"])
         if sub_rows:
-            await DBManager.upsert("paris_sub_order", sub_rows, ["sub_order_number"])
+            await DBManager.upsert("paris_sub_order", sub_rows, ["main_id"])
         if item_rows:
-            await DBManager.upsert("paris_order_item", item_rows, ["sub_order_number", "item_id"])
+            await DBManager.upsert("paris_order_item", item_rows, ["main_id", "item_id"])
 
     # ── 同步 ──────────────────────────────────────
 
