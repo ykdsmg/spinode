@@ -7,7 +7,7 @@ import aiohttp
 
 from fastapi            import FastAPI
 from contextlib         import asynccontextmanager
-from app.config         import load_paris_shop, load_falabella_shop, load_mercado_shop, load_ripley_shop
+from app.config         import load_paris_shop, load_falabella_shop, load_mercado_shop, load_ripley_shop, load_walmart_shop
 from app.core.logging   import get_logger,setup_logging
 from app.db.pool        import pool
 from starlette.requests import Request
@@ -17,6 +17,7 @@ from app.api.routers.falabella import router as fl_router
 from app.api.routers.mercado   import router as ml_router
 from app.api.routers.paris     import router as ps_router
 from app.api.routers.ripley    import router as rp_router
+from app.api.routers.walmart   import router as wm_router
 
 
 import requests
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
     app.state.falabella_shops   = await load_falabella_shop(sync_session)
     app.state.mercado_shops     = await load_mercado_shop(async_session)
     app.state.ripley_shops      = await load_ripley_shop(async_session)
+    app.state.walmart_shops     = await load_walmart_shop(async_session)
 
 
     # ── 服务运行中 ──────────────
@@ -101,3 +103,4 @@ app.include_router(fl_router, tags=["Falabella"])
 app.include_router(ml_router, tags=["Mercado"])
 app.include_router(ps_router, tags=["Paris"])
 app.include_router(rp_router, tags=["Ripley"])
+app.include_router(wm_router, tags=["Walmart"])
