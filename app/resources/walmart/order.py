@@ -220,10 +220,6 @@ class Order:
 
             nextCursor = ((resp.get("list") or {}).get("meta") or {}).get("nextCursor") or ""
 
-            if not nextCursor:
-                has_more = False
-                return
-
             order  = ((resp.get("list") or {}).get("elements") or {}).get("order") or []
             if not order:
                 has_more = False
@@ -231,6 +227,10 @@ class Order:
 
             parsed = self.parse(order)
             await self.save(parsed)
+
+            if not nextCursor:
+                has_more = False
+                return
 
     # ── 参数构建 ──────────────────────────────────
 
